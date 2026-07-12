@@ -54,6 +54,15 @@ def test_system_guided_input_cannot_be_external_validation(tmp_path):
     assert memory.internal_activation == 1 and memory.external_validation == 0
 
 
+def test_internal_activation_promotes_after_persistence_threshold(tmp_path):
+    app = pipeline(tmp_path, [[]] * 9)
+    app.memory_store.add(MemoryEntry(id="fact", content="fact"))
+    for _ in range(9): app.process("related")
+    memory = app.memory_store.find("fact")
+    assert memory.layer is LayerEnum.CONSOLIDATED
+    assert memory.internal_activation == 9 and memory.external_validation == 0
+
+
 def test_reorganization_promotes_to_core_after_two_triggers(tmp_path):
     app = pipeline(tmp_path, [[], []], relation="合并")
     existing = MemoryEntry(id="existing", content="merge-a", layer=LayerEnum.CONSOLIDATED)
@@ -62,6 +71,21 @@ def test_reorganization_promotes_to_core_after_two_triggers(tmp_path):
     candidate.external_validation = 3
     app.memory_store.update(candidate)
     app.process("different")
+    assert app.memory_store.find("candidate").layer is LayerEnum.CORE
+
+
+def test_conflict_reorganization_promotes_to_core(tmp_path):
+    app = pipeline(tmp_path, [[], []], relation="矛盾")
+    app.memory_store.add(MemoryEntry(id="existing", content="merge-a", layer=LayerEnum.CONSOLIDATED))
+    candidate = MemoryEntry(id="candidate", content="merge-b", local_reorganization_trigger=1, external_validation=3)
+    app.memory_store.add(candidate)
+    result = app.process("different")
+    assert result["reorganizations"] == [{
+        "trigger_memory_id": "candidate",
+        "paired_memory_id": "existing",
+        "action": "conflict",
+        "cosine_similarity": 1.0,
+    }]
     assert app.memory_store.find("candidate").layer is LayerEnum.CORE
 
 
@@ -74,6 +98,17 @@ def test_capacity_evicts_lowest_persistence_score(tmp_path, monkeypatch):
     app.process("different")
     assert app.memory_store.find("low") is None
     assert app.memory_store.find("high") is not None
+
+
+def test_reorganization_audit_log_has_required_fields(tmp_path):
+    app = pipeline(tmp_path, [[], []], relation="合并")
+    app.memory_store.add(MemoryEntry(id="existing", content="merge-a", layer=LayerEnum.CONSOLIDATED))
+    app.memory_store.add(MemoryEntry(id="candidate", content="merge-b", local_reorganization_trigger=1, external_validation=3))
+    app.process("different")
+    records = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+    reorganization = next(record for record in records if record["event"] == "local_reorganization")
+    assert {"timestamp", "event", "trigger_memory_id", "paired_memory_id", "action", "cosine_similarity"} <= reorganization.keys()
+    assert {"working_to_consolidated", "local_reorganization", "consolidated_to_core"} <= {record["event"] for record in records}
 
 
 def test_store_survives_restart_and_retrieval_prioritizes_core(tmp_path):

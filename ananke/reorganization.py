@@ -18,7 +18,7 @@ def check_local_reorganization(
     if not existing:
         return logs
 
-    new_vec = embedding_engine.encode(new_memory.content)
+    new_vec = embedding_engine.encode(new_memory.content)[0]
     existing_vecs = embedding_engine.encode([m.content for m in existing])
 
     for i, mem in enumerate(existing):
@@ -42,7 +42,6 @@ def check_local_reorganization(
                 memory_store.update(new_memory)
                 logs.append(
                     {
-                        "event": "reorganization",
                         "trigger_memory_id": new_memory.id,
                         "paired_memory_id": mem.id,
                         "action": action,
