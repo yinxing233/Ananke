@@ -18,3 +18,11 @@ uv run python run.py
 - 仅在快→中迁移后触发的合并/矛盾局部重组检查
 - 全链路 JSONL 操作日志
 - 用 fake embedding/LLM 编写的确定性场景测试，覆盖迁移、重组、淘汰和重启恢复
+
+## 测试与实验组
+
+```bash
+uv run pytest -q
+```
+
+默认实验组为 `Config.WORKING_PROMOTION_STRATEGY = "persistence"`：外部验证权重高于内部激活。设置为 `"frequency"` 可运行对照组；对照组只按内部激活次数（默认 3 次）将工作记忆迁入巩固层。两组共用提取、检索、容量淘汰与中→慢局部重组逻辑，以隔离快→中迁移准则的影响。

@@ -11,11 +11,12 @@ from ananke.reorganization import check_local_reorganization
 class MemoryPipeline:
     """Orchestrates the one-way three-layer memory lifecycle from the MVP spec."""
 
-    def __init__(self, memory_store, embedding_engine, llm_client, event_logger):
+    def __init__(self, memory_store, embedding_engine, llm_client, event_logger, promotion_strategy=None):
         self.memory_store = memory_store
         self.embedding_engine = embedding_engine
         self.llm_client = llm_client
         self.event_logger = event_logger
+        self.promotion_strategy = promotion_strategy
 
     def process(self, user_input: str, *, system_guided: bool = False) -> Dict[str, List]:
         activated = detect_activations(user_input, self.memory_store, self.embedding_engine, self.event_logger, system_guided)
@@ -26,7 +27,7 @@ class MemoryPipeline:
             self.event_logger.log("memory_write", memory_id=memory.id, content_summary=content[:120], layer=memory.layer.value)
             written.append(memory)
         enforce_working_capacity(self.memory_store, self.event_logger)
-        consolidated = promote_working_memories(self.memory_store, self.event_logger)
+        consolidated = promote_working_memories(self.memory_store, self.event_logger, self.promotion_strategy)
         reorganizations = []
         for memory in consolidated:
             for record in check_local_reorganization(memory, self.memory_store, self.embedding_engine, self.llm_client):

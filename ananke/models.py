@@ -33,6 +33,12 @@ class MemoryEntry(BaseModel):
             + self.internal_activation * Config.INTERNAL_ACTIVATION_WEIGHT
         )
 
+    @computed_field
+    @property
+    def frequency_score(self) -> int:
+        """Control-group evidence: number of relevant retrieval activations."""
+        return self.internal_activation
+
     # 预留字段
     decay_coefficient: Optional[float] = None
     persistence_score_log: List[float] = Field(default_factory=list)

@@ -10,7 +10,12 @@ class Config:
     EXTERNAL_VALIDATION_WEIGHT = 1.0
     INTERNAL_ACTIVATION_WEIGHT = 1 / math.e  # ≈ 0.368
     MIGRATION_THRESHOLD = 3.0
+    FREQUENCY_MIGRATION_THRESHOLD = 3
     LOCAL_REORG_THRESHOLD = 2
+
+    # 实验组/对照组开关：persistence（默认）或 frequency。
+    # frequency 只使用内部激活次数，刻意忽略外部验证的权重差异。
+    WORKING_PROMOTION_STRATEGY = "persistence"
 
     # 语义相似度阈值
     INTERNAL_ACTIVATION_THRESHOLD = 0.6

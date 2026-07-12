@@ -7,6 +7,7 @@ from ananke.logger import EventLogger
 from ananke.memory_store import MemoryStore
 from ananke.models import LayerEnum, MemoryEntry
 from ananke.pipeline import MemoryPipeline
+from ananke.promotion import FrequencyPromotionStrategy, promotion_strategy_from_config
 
 
 class FakeEmbedding:
@@ -61,6 +62,43 @@ def test_internal_activation_promotes_after_persistence_threshold(tmp_path):
     memory = app.memory_store.find("fact")
     assert memory.layer is LayerEnum.CONSOLIDATED
     assert memory.internal_activation == 9 and memory.external_validation == 0
+
+
+def test_frequency_control_promotes_by_activation_count(tmp_path):
+    app = pipeline(tmp_path, [[], [], []])
+    app.promotion_strategy = FrequencyPromotionStrategy()
+    app.memory_store.add(MemoryEntry(id="fact", content="fact"))
+
+    for _ in range(3):
+        app.process("fact")
+
+    memory = app.memory_store.find("fact")
+    assert memory.layer is LayerEnum.CONSOLIDATED
+    assert memory.internal_activation == 3 and memory.external_validation == 3
+
+
+def test_config_selects_frequency_control(monkeypatch):
+    monkeypatch.setattr(Config, "WORKING_PROMOTION_STRATEGY", "frequency")
+    assert isinstance(promotion_strategy_from_config(), FrequencyPromotionStrategy)
+
+
+def test_persistence_and_frequency_control_diverge_on_mixed_evidence(tmp_path):
+    persistence = pipeline(tmp_path / "persistence", [[], [], []])
+    frequency = pipeline(tmp_path / "frequency", [[], [], []])
+    frequency.promotion_strategy = FrequencyPromotionStrategy()
+    for app in (persistence, frequency):
+        app.memory_store.add(MemoryEntry(id="fact", content="fact"))
+        app.process("related")
+        app.process("fact", system_guided=True)
+
+    assert persistence.memory_store.find("fact").layer is LayerEnum.WORKING
+    assert frequency.memory_store.find("fact").layer is LayerEnum.WORKING
+
+    for app in (persistence, frequency):
+        app.process("fact")
+
+    assert persistence.memory_store.find("fact").layer is LayerEnum.WORKING
+    assert frequency.memory_store.find("fact").layer is LayerEnum.CONSOLIDATED
 
 
 def test_reorganization_promotes_to_core_after_two_triggers(tmp_path):
