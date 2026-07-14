@@ -130,8 +130,20 @@
 ---
 
 ## 附录 A：冻结的 Prompt 措辞（运行期不得改）
-- 抽取 Prompt（来自 `extraction.py`）："Extract short, atomic facts worth remembering long-term from the input below. Output language must match the input language. Output only a JSON array of strings; if none, output []. User input: <input>"
-- 冲突三选一 Prompt（来自 `reorganization.py`）：「记忆A：<new> 记忆B：<old> 这两条记忆的关系是什么？请只回答一个词：合并、矛盾 或 无关。」+ system_prompt「你是严格的记忆一致性裁判。只依据两条记忆的字面语义判断，不推测隐含意图。若它们断言了彼此不相容的事实，答'矛盾'；若它们表达同一事实的不同表述，答'合并'；否则答'无关'。」
+
+> 以下文本为 `extraction.py` / `reorganization.py` 中**实际冻结**的 Prompt，**以代码为准**。本附录仅作审计留档，运行期不得改。
+
+### A.1 抽取 Prompt（来自 `ananke/extraction.py`）
+- **system_prompt**（冻结）：
+  > "You are a memory extractor. Extract short, atomic facts worth remembering long-term from the user's input. Output language MUST match the input language (if input is English, output English; if Chinese, output Chinese). Output only a JSON array of strings, e.g. [\"User likes badminton\"] or [\"用户喜欢羽毛球\"]. Do not output any explanation, extra text, or code fences. If nothing is worth remembering, output []."
+- **user prompt**（冻结）：
+  > "Extract short, atomic facts worth remembering long-term from the input below. Output language must match the input language. Output only a JSON array of strings; if none, output [].\nUser input: <input>"
+
+### A.2 冲突三选一 Prompt（来自 `ananke/reorganization.py`）
+- **system_prompt**（冻结）：
+  > "你是一个严谨的记忆关系判断器。只允许回答以下三个词之一：合并、矛盾、无关。不要解释，不要任何多余的字符（不要标点、不要引号）。"
+- **user prompt**（冻结）：
+  > "记忆A：<new>\n记忆B：<old>\n\n这两条记忆的关系是什么？请只回答一个词：合并、矛盾 或 无关。"
 
 ## 附录 B：常量表（来自 config.py，冻结）
 ```
@@ -140,6 +152,7 @@ INTERNAL_ACTIVATION_THRESHOLD = 0.60
 DEDUP_SIMILARITY_THRESHOLD   = 0.80
 REORG_SIMILARITY_THRESHOLD   = 0.90
 MIGRATION_THRESHOLD          = 3.0
+FREQUENCY_MIGRATION_THRESHOLD = 3      # Phase 3 Internal Selection 对照组升层阈值（作用于 total_activation）
 LOCAL_REORG_THRESHOLD        = 2
 WORKING_CAPACITY            = 50
 CONSOLIDATED_CAPACITY       = 200

@@ -5,7 +5,7 @@
 
 ## 当前状态（2026-07-14，已升级协议 v3）
 - **协议已升 v3**（2026-07-14，PI 决策）：EV 阈值 0.85→0.80；新增「写入前去重」控制变量 `DEDUP_SIMILARITY_THRESHOLD=0.80`（pipeline 在提取后、写入前比对既有 working+consolidated 记忆，≥0.80 跳过写入并记 `memory_dedup_skip`，消除真实 LLM 提取碎片化混杂）；提取 Prompt 改「输出与输入同语言」。详见 `01_PROTOCOL_v3.md`。
-- MVP 核心逻辑**已完成且被测过**：`uv run pytest` → 11/11 通过（确定性测试，用 FakeEmbedding / FakeLLM）。真实跑亦通过（见下）。
+- MVP 核心逻辑**已完成且被测过**：`uv run pytest` → 12/12 通过（确定性测试，用 FakeEmbedding / FakeLLM）。真实跑亦通过（见下）。
 - LLM 接入层：provider 抽象（`BaseLLMClient` + `MockLLMClient` + `OpenAICompatibleClient`），工厂 `create_llm_client()`。已支持 Gemini / DeepSeek / Groq / OpenRouter / Ollama / OpenAI。密钥走 `.env`（已被 .gitignore 忽略），零硬编码。`OpenAICompatibleClient.call_llm` 对真实 API 限流（如 Gemini 免费层 15 req/min 的 429）做**指数退避重试**（8s→16s→32s→…，最多 6 次），保证任意长度语料都能跑完——纯 I/O 韧性，不影响理论行为。
 - 观测工具（纯增益、非漂移）：
   - `tools/analyze_trajectory.py`：§九 日志 → per-memory **Memory Trajectory**（状态轨迹 + SVG 事件时间线 + 失败样本区）。纪律：只描述给定规则下系统产生的动力学（Rule→Dynamics），不判定理论。
@@ -13,7 +13,10 @@
   - `tools/run_corpus.py`：用**真实** EmbeddingEngine + `create_llm_client()` 跑外部语料，产出真实语义日志；支持 `--strategy persistence|frequency`。守反身性红线（只喂外部语料，绝不自生成）。
 
 ## 模块清单（ananke/）
-config / embedding / llm_client / extraction / activation / migration / reorganization / memory_store / logger / models / pipeline / promotion（共 13 模块 + main.py / run.py）。
+config / embedding / llm_client / extraction / activation / migration / reorganization / memory_store / logger / models / pipeline / promotion（共 12 个功能模块；另含 `__init__.py` 与运行入口 `main.py` / `run.py`，不计入模块数）。
+
+## 事件日志类型（logger event key，全 8 类）
+`memory_write` / `internal_activation` / `external_validation` / `working_eviction` / `working_to_consolidated` / `local_reorganization` / `consolidated_to_core` / `memory_dedup_skip`（v3 新增，写入前去重命中时记）。代码 log 的英文 event key 与历史设计文档的中文事件名无一一对照，以此清单为准。
 
 ## 当前具体选型（属 Implementation，可换）
 - 嵌入模型：`all-MiniLM-L6-v2`（英文模型；中文阈值待 Phase 3 sweep，当前只验证"动力学是否发生"）。

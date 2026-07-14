@@ -1,7 +1,7 @@
 # Ananke
 
-基于存续检验（persistence-based）的三层记忆 MVP。实现严格遵循
-[`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md)：工作记忆只能经由存续得分迁入巩固层，巩固层只能经由局部重组迁入核心层。
+基于存续检验（persistence-based）的三层记忆 MVP。实现的权威定义来自
+[`00_THEORY.md`](docs/00_THEORY.md)（理论层）与 [`01_PROTOCOL_v3.md`](docs/01_PROTOCOL_v3.md)（实验协议，唯一合法映射层）：工作记忆只能经由存续得分迁入巩固层，巩固层只能经由局部重组迁入核心层。初版设计稿 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 已标记为历史文档（部分参数与现行实现相反，见其头部声明）。
 
 ## 运行
 
@@ -19,10 +19,20 @@ uv run python run.py
 cp .env.example .env      # 然后填入你的 LLM_API_KEY
 ```
 
-在 `.env` 中：
+在 `.env` 中（所有项均可缺省，缺省取括号内默认值）：
 
-- `USE_MOCK_LLM=true`：离线 Mock，无需密钥（调试用）。
-- `USE_MOCK_LLM=false`：接入真实 LLM，按 `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 切换服务商。
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `USE_MOCK_LLM` | `true` | `true`=离线 Mock（无需密钥）；`false`=接入真实 LLM |
+| `LLM_PROVIDER` | `openai-compatible` | 服务商：openai / deepseek / openrouter / groq / ollama / openai-compatible |
+| `LLM_BASE_URL` | （空） | 留空则使用 provider 默认接口 |
+| `LLM_API_KEY` | （空） | 真实 LLM 密钥；绝不硬编码进代码 |
+| `LLM_MODEL` | `deepseek-chat` | 模型名 |
+| `LLM_TEMPERATURE` | `0.0` | 固定 0.0 保证可复现（与协议控制变量一致） |
+| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | 本地嵌入模型路径/名称 |
+| `WORKING_PROMOTION_STRATEGY` | `persistence` | `persistence`=实验组（External Selection）；`frequency`=对照组（Internal Selection） |
+
+> 切换服务商只需改 `.env`，无需改代码；所有 provider 走 OpenAI 兼容接口。
 
 内置 `OpenAICompatibleClient`，覆盖 OpenAI / DeepSeek / OpenRouter / Groq / Ollama / **Gemini** 等——它们都走 OpenAI 兼容接口，仅靠 `.env` 里的 `LLM_BASE_URL` + `LLM_API_KEY` + `LLM_MODEL` 区分，**切换服务商无需改代码**。Gemini 使用其官方 OpenAI 兼容接口（不填 `LLM_BASE_URL` 时自动使用默认值）。需要 Anthropic 等其它后端时，在 `ananke/llm_client.py` 增加对应子类并注册到 `create_llm_client()` 工厂即可。
 
@@ -40,4 +50,4 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 uv run pytest -q
 ```
 
-默认实验组为 `Config.WORKING_PROMOTION_STRATEGY = "persistence"`：外部验证权重高于内部激活。设置为 `"frequency"` 可运行对照组；对照组只按内部激活次数（默认 3 次）将工作记忆迁入巩固层。两组共用提取、检索、容量淘汰与中→慢局部重组逻辑，以隔离快→中迁移准则的影响。
+默认实验组为 `Config.WORKING_PROMOTION_STRATEGY = "persistence"`：外部验证权重高于内部激活。设置为 `"frequency"` 可运行对照组；对照组只按 `total_activation`（每次语义命中 cosine ≥ 0.60 即 +1，不区分来源，默认阈值 3 次）将工作记忆迁入巩固层，不复用 `internal_activation`。两组共用提取、检索、容量淘汰与中→慢局部重组逻辑，以隔离快→中迁移准则（选择压力来源）的影响。
