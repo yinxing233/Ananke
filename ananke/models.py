@@ -21,6 +21,7 @@ class MemoryEntry(BaseModel):
     last_activated_at: Optional[datetime] = None
     internal_activation: int = 0
     external_validation: int = 0
+    total_activation: int = 0          # EV 或 IA 任一触发时 +1；Frequency 模式（Internal Selection 对照组）使用，不区分来源
     local_reorganization_trigger: int = 0
     source_ids: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
@@ -36,8 +37,8 @@ class MemoryEntry(BaseModel):
     @computed_field
     @property
     def frequency_score(self) -> int:
-        """Control-group evidence: number of relevant retrieval activations."""
-        return self.internal_activation
+        """Control-group (Internal Selection) evidence: total semantic activations regardless of source."""
+        return self.total_activation
 
     # 预留字段
     decay_coefficient: Optional[float] = None

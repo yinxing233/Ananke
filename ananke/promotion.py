@@ -52,7 +52,7 @@ class FrequencyPromotionStrategy(WorkingPromotionStrategy):
         return Config.FREQUENCY_MIGRATION_THRESHOLD
 
     def score(self, memory: MemoryEntry) -> float:
-        return float(memory.internal_activation)
+        return float(memory.frequency_score)
 
 
 def promotion_strategy_from_config() -> WorkingPromotionStrategy:

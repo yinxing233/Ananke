@@ -11,6 +11,21 @@ uv run python run.py
 
 默认使用 mock LLM，因此无需 API 密钥；首次运行会下载 sentence-transformers 的本地嵌入模型。数据保存在 `data/*.jsonl`，审计事件保存在 `logs/events.jsonl`。
 
+## 配置 LLM（接入真实模型）
+
+密钥只来自环境变量 / `.env`，代码中不硬编码，且 `.env` 已被 `.gitignore` 忽略，不会上传到 git。
+
+```bash
+cp .env.example .env      # 然后填入你的 LLM_API_KEY
+```
+
+在 `.env` 中：
+
+- `USE_MOCK_LLM=true`：离线 Mock，无需密钥（调试用）。
+- `USE_MOCK_LLM=false`：接入真实 LLM，按 `LLM_PROVIDER` / `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` 切换服务商。
+
+内置 `OpenAICompatibleClient`，覆盖 OpenAI / DeepSeek / OpenRouter / Groq / Ollama / **Gemini** 等——它们都走 OpenAI 兼容接口，仅靠 `.env` 里的 `LLM_BASE_URL` + `LLM_API_KEY` + `LLM_MODEL` 区分，**切换服务商无需改代码**。Gemini 使用其官方 OpenAI 兼容接口（不填 `LLM_BASE_URL` 时自动使用默认值）。需要 Anthropic 等其它后端时，在 `ananke/llm_client.py` 增加对应子类并注册到 `create_llm_client()` 工厂即可。
+
 ## 当前实现
 
 - 三层 JSONL 存储、慢层优先检索与工作层容量淘汰

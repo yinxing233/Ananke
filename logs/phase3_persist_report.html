@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8">
+<title>Ananke Trajectory Report</title></head>
+<body style="font-family:-apple-system,Segoe UI,sans-serif;background:#f5f6f8;color:#222;max-width:920px;margin:0 auto;padding:20px">
+<h2>Ananke · Memory Trajectory 报告</h2>
+<p style="color:#666;font-size:13px">数据源: logs\phase3_persist.jsonl · 共 21 条记忆的动力学轨迹。
+图例: <span style="color:#2e7d32">W 写入</span> · <span style="color:#1565c0">I 内部激活</span> ·
+<span style="color:#ef6c00">E 外部验证</span> · <span style="color:#6a1b9a">C 升巩固层</span> ·
+<span style="color:#212121">K 升慢层</span> · <span style="color:#c62828">R 重组</span> · <span style="color:#9e9e9e">X 淘汰</span></p>
+<p style="color:#c62828;font-size:12px">本分析器只描述系统发生了什么，不判定理论是否正确。</p>
+
+<h3 style="margin-top:24px">未迁移 / 失败样本（通常比成功样本更重要）</h3>
+<ul style="font-size:13px;color:#555;line-height:1.5"><li style='margin-bottom:4px'>· 停留巩固层: 「The user enjoys playin」 — local_reorganization_trigger=0 （需 ≥ 2 才进慢层）</li><li style='margin-bottom:4px'>· 未晋升(快层): 「User loves badminton」 — 当前 persistence=1.10，距阈值 3.0 还差 1.90；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user took a walk i」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user bought a new 」 — 当前 persistence=0.37，距阈值 3.0 还差 2.63；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user watched a mov」 — 当前 persistence=0.37，距阈值 3.0 还差 2.63；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user plays badmint」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user adopted a cat」 — 当前 persistence=1.84，距阈值 3.0 还差 1.16；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user tried cooking」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi the cat is playf」 — 当前 persistence=1.47，距阈值 3.0 还差 1.53；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user went grocery 」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi loves chasing to」 — 当前 persistence=0.74，距阈值 3.0 还差 2.26；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user visited a new」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi sleeps on the us」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user recently read」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi gets along well 」 — 当前 persistence=0.74，距阈值 3.0 还差 2.26；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi the cat follows 」 — 当前 persistence=0.37，距阈值 3.0 还差 2.63；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user visited a fri」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「Mochi does not like be」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user is considerin」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user might visit T」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li><li style='margin-bottom:4px'>· 未晋升(快层): 「The user likes the esp」 — 当前 persistence=0.00，距阈值 3.0 还差 3.00；若无新的外部验证将保持此状态</li></ul>
+
+<h3 style="margin-top:24px">各记忆状态轨迹</h3>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user enjoys playing badminton on weekends</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">697218ed-b4a… · 最终层=CONSOLIDATED</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(1.00) → WORKING(2.00) → WORKING(2.37) → WORKING(2.74) → WORKING(3.10) → CONSOLIDATED(3.10)</div>
+      <svg viewBox="0 0 574 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:574px"><line x1="40" y1="32" x2="554" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:22.750286] 写入
+The user enjoys playing badminton on weekends</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="126" cy="32" r="15" fill="#ef6c00"><title>[2026-07-14T01:44:23.465826] 外部验证 #1
+cosine=0.8185887336730957
+The user went to play badminton again this Saturday.</title></circle><text x="126" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">E</text><text x="126" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="211" cy="32" r="15" fill="#ef6c00"><title>[2026-07-14T01:44:24.812998] 外部验证 #2
+cosine=0.8662695288658142
+The user loves badminton and plays it every week.</title></circle><text x="211" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">E</text><text x="211" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text><circle cx="297" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:26.170305] 内部激活 #1
+cosine=0.7296797633171082
+The user played badminton at the community center yesterday.</title></circle><text x="297" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="297" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">4</text><circle cx="383" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:26.811317] 内部激活 #2
+cosine=0.631572425365448
+The user bought a new badminton racket online.</title></circle><text x="383" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="383" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">5</text><circle cx="468" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:28.045314] 内部激活 #3
+cosine=0.7505824565887451
+The user played badminton with coworkers after work today.</title></circle><text x="468" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="468" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">6</text><circle cx="554" cy="32" r="15" fill="#6a1b9a"><title>[2026-07-14T01:44:28.656362] 升巩固层
+strategy=persistence score=3.103638323514327
+persist=3.103638323514327 freq=5</title></circle><text x="554" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">C</text><text x="554" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">7</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:22.750286] 写入 ⏎ The user enjoys playing badminton on weekends</td></tr><tr><td style="color:#ef6c00;font-weight:600;white-space:nowrap">2. 外部验证</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:23.465826] 外部验证 #1 ⏎ cosine=0.8185887336730957 ⏎ The user went to play badminton again this Saturday.</td></tr><tr><td style="color:#ef6c00;font-weight:600;white-space:nowrap">3. 外部验证</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">2.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:24.812998] 外部验证 #2 ⏎ cosine=0.8662695288658142 ⏎ The user loves badminton and plays it every week.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">4. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">2.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:26.170305] 内部激活 #1 ⏎ cosine=0.7296797633171082 ⏎ The user played badminton at the community center yesterday.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">5. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">2.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:26.811317] 内部激活 #2 ⏎ cosine=0.631572425365448 ⏎ The user bought a new badminton racket online.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">6. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">3.10</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.045314] 内部激活 #3 ⏎ cosine=0.7505824565887451 ⏎ The user played badminton with coworkers after work today.</td></tr><tr><td style="color:#6a1b9a;font-weight:600;white-space:nowrap">7. →巩固层</td><td style="font-size:12px;color:#555;white-space:nowrap">CONSOLIDATED</td><td style="font-size:12px;color:#555;white-space:nowrap">3.10</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.656362] 升巩固层 ⏎ strategy=persistence score=3.103638323514327 ⏎ persist=3.103638323514327 freq=5</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">User loves badminton</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">31458bf8-4d1… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37) → WORKING(0.74) → WORKING(1.10)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:25.535025] 写入
+User loves badminton</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="147" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:26.170305] 内部激活 #1
+cosine=0.7164787650108337
+The user played badminton at the community center yesterday.</title></circle><text x="147" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="147" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="253" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:26.812317] 内部激活 #2
+cosine=0.6345318555831909
+The user bought a new badminton racket online.</title></circle><text x="253" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="253" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:28.046315] 内部激活 #3
+cosine=0.717779815196991
+The user played badminton with coworkers after work today.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">4</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:25.535025] 写入 ⏎ User loves badminton</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:26.170305] 内部激活 #1 ⏎ cosine=0.7164787650108337 ⏎ The user played badminton at the community center yesterday.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">3. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:26.812317] 内部激活 #2 ⏎ cosine=0.6345318555831909 ⏎ The user bought a new badminton racket online.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">4. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.10</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.046315] 内部激活 #3 ⏎ cosine=0.717779815196991 ⏎ The user played badminton with coworkers after work today.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user took a walk in the park this morning</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">a3b5769e-96f… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:26.157306] 写入
+The user took a walk in the park this morning</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:26.157306] 写入 ⏎ The user took a walk in the park this morning</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user bought a new badminton racket online</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">5f4007b4-0ba… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:27.406627] 写入
+The user bought a new badminton racket online</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:28.047315] 内部激活 #1
+cosine=0.6708216667175293
+The user played badminton with coworkers after work today.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:27.406627] 写入 ⏎ The user bought a new badminton racket online</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.047315] 内部激活 #1 ⏎ cosine=0.6708216667175293 ⏎ The user played badminton with coworkers after work today.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user watched a movie with friends on Friday</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">bf065d51-88d… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:28.030314] 写入
+The user watched a movie with friends on Friday</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:45:51.724232] 内部激活 #1
+cosine=0.6547427773475647
+The user visited a friend over the weekend.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.030314] 写入 ⏎ The user watched a movie with friends on Friday</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:51.724232] 内部激活 #1 ⏎ cosine=0.6547427773475647 ⏎ The user visited a friend over the weekend.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user plays badminton with coworkers</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">8db9b430-442… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:28.655362] 写入
+The user plays badminton with coworkers</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:28.655362] 写入 ⏎ The user plays badminton with coworkers</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user adopted a cat named Mochi</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">8c069d5d-bb0… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37) → WORKING(0.74) → WORKING(1.10) → WORKING(1.47) → WORKING(1.84)</div>
+      <svg viewBox="0 0 502 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:502px"><line x1="40" y1="32" x2="482" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:29.377801] 写入
+The user adopted a cat named Mochi</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="128" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:30.125948] 内部激活 #1
+cosine=0.7407150864601135
+The user said Mochi the cat is very playful and energetic.</title></circle><text x="128" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="128" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="217" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:31.576400] 内部激活 #2
+cosine=0.6049628853797913
+The user mentioned that Mochi loves chasing toys around the house.</title></circle><text x="217" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="217" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text><circle cx="305" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:46.734941] 内部激活 #3
+cosine=0.7018173933029175
+The user mentioned Mochi is getting along well with the neighbors cat.</title></circle><text x="305" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="305" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">4</text><circle cx="394" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:48.081493] 内部激活 #4
+cosine=0.7177993655204773
+The user said Mochi the cat follows them everywhere at home.</title></circle><text x="394" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="394" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">5</text><circle cx="482" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:45:50.999252] 内部激活 #5
+cosine=0.6732399463653564
+The user said their cat Mochi actually hates being around other cats.</title></circle><text x="482" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="482" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">6</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:29.377801] 写入 ⏎ The user adopted a cat named Mochi</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:30.125948] 内部激活 #1 ⏎ cosine=0.7407150864601135 ⏎ The user said Mochi the cat is very playful and energetic.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">3. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:31.576400] 内部激活 #2 ⏎ cosine=0.6049628853797913 ⏎ The user mentioned that Mochi loves chasing toys around the house.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">4. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.10</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:46.734941] 内部激活 #3 ⏎ cosine=0.7018173933029175 ⏎ The user mentioned Mochi is getting along well with the neighbors cat.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">5. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.47</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:48.081493] 内部激活 #4 ⏎ cosine=0.7177993655204773 ⏎ The user said Mochi the cat follows them everywhere at home.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">6. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.84</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:50.999252] 内部激活 #5 ⏎ cosine=0.6732399463653564 ⏎ The user said their cat Mochi actually hates being around other cats.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user tried cooking a new recipe this weekend</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">b70f0a71-c61… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:30.106948] 写入
+The user tried cooking a new recipe this weekend</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:30.106948] 写入 ⏎ The user tried cooking a new recipe this weekend</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi the cat is playful and energetic</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">4d194113-e84… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37) → WORKING(0.74) → WORKING(1.10) → WORKING(1.47)</div>
+      <svg viewBox="0 0 430 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:430px"><line x1="40" y1="32" x2="410" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:30.837992] 写入
+Mochi the cat is playful and energetic</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="132" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:31.576400] 内部激活 #1
+cosine=0.6368772387504578
+The user mentioned that Mochi loves chasing toys around the house.</title></circle><text x="132" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="132" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="225" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:46.735940] 内部激活 #2
+cosine=0.7265434265136719
+The user mentioned Mochi is getting along well with the neighbors cat.</title></circle><text x="225" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="225" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text><circle cx="318" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:48.081493] 内部激活 #3
+cosine=0.6860687732696533
+The user said Mochi the cat follows them everywhere at home.</title></circle><text x="318" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="318" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">4</text><circle cx="410" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:45:51.000251] 内部激活 #4
+cosine=0.6587039232254028
+The user said their cat Mochi actually hates being around other cats.</title></circle><text x="410" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="410" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">5</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:30.837992] 写入 ⏎ Mochi the cat is playful and energetic</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:31.576400] 内部激活 #1 ⏎ cosine=0.6368772387504578 ⏎ The user mentioned that Mochi loves chasing toys around the house.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">3. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:46.735940] 内部激活 #2 ⏎ cosine=0.7265434265136719 ⏎ The user mentioned Mochi is getting along well with the neighbors cat.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">4. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.10</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:48.081493] 内部激活 #3 ⏎ cosine=0.6860687732696533 ⏎ The user said Mochi the cat follows them everywhere at home.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">5. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">1.47</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:51.000251] 内部激活 #4 ⏎ cosine=0.6587039232254028 ⏎ The user said their cat Mochi actually hates being around other cats.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user went grocery shopping this afternoon</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">1327c6cb-4f5… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:31.556400] 写入
+The user went grocery shopping this afternoon</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:31.556400] 写入 ⏎ The user went grocery shopping this afternoon</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi loves chasing toys around the house</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">85a8d6cd-db0… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37) → WORKING(0.74)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:32.282428] 写入
+Mochi loves chasing toys around the house</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="200" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:46.736940] 内部激活 #1
+cosine=0.6024429202079773
+The user mentioned Mochi is getting along well with the neighbors cat.</title></circle><text x="200" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="200" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:48.082493] 内部激活 #2
+cosine=0.644115149974823
+The user said Mochi the cat follows them everywhere at home.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:32.282428] 写入 ⏎ Mochi loves chasing toys around the house</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:46.736940] 内部激活 #1 ⏎ cosine=0.6024429202079773 ⏎ The user mentioned Mochi is getting along well with the neighbors cat.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">3. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:48.082493] 内部激活 #2 ⏎ cosine=0.644115149974823 ⏎ The user said Mochi the cat follows them everywhere at home.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user visited a new cafe downtown</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">dfd7d2d4-0a7… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:43.704184] 写入
+The user visited a new cafe downtown</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:43.704184] 写入 ⏎ The user visited a new cafe downtown</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi sleeps on the user&#x27;s bed every night</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">02f1b9e1-cc4… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:44.437757] 写入
+Mochi sleeps on the user&#x27;s bed every night</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:44.437757] 写入 ⏎ Mochi sleeps on the user&#x27;s bed every night</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user recently read a book about cat behavior</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">91b7c2c3-009… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:46.709853] 写入
+The user recently read a book about cat behavior</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:46.709853] 写入 ⏎ The user recently read a book about cat behavior</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi gets along well with the neighbor&#x27;s cat</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">ce036ffc-269… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37) → WORKING(0.74)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:44:48.060493] 写入
+Mochi gets along well with the neighbor&#x27;s cat</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="200" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:44:48.083493] 内部激活 #1
+cosine=0.7261527180671692
+The user said Mochi the cat follows them everywhere at home.</title></circle><text x="200" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="200" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:45:51.001251] 内部激活 #2
+cosine=0.7173953652381897
+The user said their cat Mochi actually hates being around other cats.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">3</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:48.060493] 写入 ⏎ Mochi gets along well with the neighbor&#x27;s cat</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:44:48.083493] 内部激活 #1 ⏎ cosine=0.7261527180671692 ⏎ The user said Mochi the cat follows them everywhere at home.</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">3. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.74</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:51.001251] 内部激活 #2 ⏎ cosine=0.7173953652381897 ⏎ The user said their cat Mochi actually hates being around other cats.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi the cat follows the user everywhere at home</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">13bfdcf8-d4e… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00) → WORKING(0.37)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="40" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:50.973249] 写入
+Mochi the cat follows the user everywhere at home</title></circle><text x="40" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="40" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text><circle cx="360" cy="32" r="15" fill="#1565c0"><title>[2026-07-14T01:45:51.001251] 内部激活 #1
+cosine=0.7202745676040649
+The user said their cat Mochi actually hates being around other cats.</title></circle><text x="360" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">I</text><text x="360" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">2</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:50.973249] 写入 ⏎ Mochi the cat follows the user everywhere at home</td></tr><tr><td style="color:#1565c0;font-weight:600;white-space:nowrap">2. 内部激活</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.37</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:51.001251] 内部激活 #1 ⏎ cosine=0.7202745676040649 ⏎ The user said their cat Mochi actually hates being around other cats.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user visited a friend over the weekend</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">e7937a28-525… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:52.628870] 写入
+The user visited a friend over the weekend</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:52.628870] 写入 ⏎ The user visited a friend over the weekend</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">Mochi does not like being touched</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">4a5794e9-158… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:53.252572] 写入
+Mochi does not like being touched</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:53.252572] 写入 ⏎ Mochi does not like being touched</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user is considering learning to swim</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">a66032de-f77… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:53.873824] 写入
+The user is considering learning to swim</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:53.873824] 写入 ⏎ The user is considering learning to swim</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user might visit Tokyo next year</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">33803bd5-105… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:54.601180] 写入
+The user might visit Tokyo next year</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:54.601180] 写入 ⏎ The user might visit Tokyo next year</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e0e0e0;border-radius:8px;padding:12px;margin-bottom:14px;background:#fff">
+      <div style="font-weight:700;margin-bottom:4px">The user likes the espresso at the new coffee shop</div>
+      <div style="font-size:12px;color:#666;margin-bottom:6px">5cc2c522-92d… · 最终层=WORKING</div>
+      <div style="font-size:12px;color:#1565c0;margin-bottom:6px;font-family:monospace;word-break:break-all">状态轨迹: WORKING(0.00)</div>
+      <svg viewBox="0 0 380 64" width="100%" preserveAspectRatio="xMinYMin meet" style="max-width:380px"><line x1="40" y1="32" x2="360" y2="32" stroke="#cfcfcf" stroke-width="2"/><circle cx="190" cy="32" r="15" fill="#2e7d32"><title>[2026-07-14T01:45:55.325420] 写入
+The user likes the espresso at the new coffee shop</title></circle><text x="190" y="37" text-anchor="middle" font-size="13" fill="#fff" font-family="sans-serif">W</text><text x="190" y="58" text-anchor="middle" font-size="10" fill="#999" font-family="sans-serif">1</text></svg>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead><tr style="text-align:left;color:#888;font-size:11px">
+          <th>事件</th><th>层</th><th>persist</th><th>明细</th></tr></thead>
+        <tbody><tr><td style="color:#2e7d32;font-weight:600;white-space:nowrap">1. 写入</td><td style="font-size:12px;color:#555;white-space:nowrap">WORKING</td><td style="font-size:12px;color:#555;white-space:nowrap">0.00</td><td style="font-size:12px;color:#555">[2026-07-14T01:45:55.325420] 写入 ⏎ The user likes the espresso at the new coffee shop</td></tr></tbody>
+      </table>
+    </div>
+</body></html>

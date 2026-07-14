@@ -29,7 +29,7 @@ class FakeLLM:
     def __init__(self, extractions, relation="合并"):
         self.extractions, self.relation = list(extractions), relation
 
-    def call_llm(self, prompt):
+    def call_llm(self, prompt, *args, **kwargs):
         if "提取" in prompt: return json.dumps(self.extractions.pop(0), ensure_ascii=False)
         return self.relation
 
@@ -74,7 +74,7 @@ def test_frequency_control_promotes_by_activation_count(tmp_path):
 
     memory = app.memory_store.find("fact")
     assert memory.layer is LayerEnum.CONSOLIDATED
-    assert memory.internal_activation == 3 and memory.external_validation == 3
+    assert memory.internal_activation == 0 and memory.external_validation == 3
 
 
 def test_config_selects_frequency_control(monkeypatch):

@@ -4,6 +4,12 @@ from ananke.config import Config
 from ananke.embedding import EmbeddingEngine
 from ananke.models import MemoryEntry
 
+# 约束真实 LLM 只做最窄的三选一判断，降低误判（文档第六节）。
+_SYSTEM_PROMPT = (
+    "你是一个严谨的记忆关系判断器。只允许回答以下三个词之一：合并、矛盾、无关。"
+    "不要解释，不要任何多余的字符（不要标点、不要引号）。"
+)
+
 
 def check_local_reorganization(
     new_memory: MemoryEntry,
@@ -29,7 +35,7 @@ def check_local_reorganization(
                 f"记忆B：{mem.content}\n\n"
                 "这两条记忆的关系是什么？请只回答一个词：合并、矛盾 或 无关。"
             )
-            response = llm_client.call_llm(prompt).strip()
+            response = llm_client.call_llm(prompt, system_prompt=_SYSTEM_PROMPT, temperature=0.0).strip()
             if "矛盾" in response:
                 action = "conflict"
             elif "合并" in response:
