@@ -25,6 +25,8 @@ import json
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -54,13 +56,15 @@ class FakeEmbedding:
             if kw in text:
                 v = [0.0] * self.DIM
                 v[idx] = 1.0
-                return v
-        return [0.0] * self.DIM
+                return np.array(v)
+        return np.array([0.0] * self.DIM)
 
     def encode(self, text):
+        # 返回 numpy 数组以匹配真实 EmbeddingEngine 的契约（pipeline v3 去重逻辑调 .tolist()）。
+        # 单条输入保持 shape (1, DIM)，兼容 pipeline 的 `[0]` 取向量写法。
         if isinstance(text, list):
-            return [self._vec(t) for t in text]
-        return [self._vec(text)]
+            return np.array([self._vec(t) for t in text])
+        return np.array([self._vec(text)])
 
     @staticmethod
     def cosine_similarity(a, b) -> float:
@@ -79,7 +83,9 @@ class ScriptedLLM(BaseLLMClient):
         self.relations = list(relations)
 
     def call_llm(self, prompt: str, system_prompt=None, temperature=None) -> str:
-        if "提取" in prompt:
+        # v3 起 extraction.py 的抽取 prompt 改为英文（跨语言嵌入失真修复），
+        # 故按英文关键词匹配；重组分支仍匹配中文（reorganization.py 的 prompt 仍是中文）。
+        if "extract" in prompt.lower():
             return json.dumps(self.extractions.pop(0), ensure_ascii=False) if self.extractions else "[]"
         if "关系" in prompt or "合并" in prompt:
             return self.relations.pop(0) if self.relations else "无关"
