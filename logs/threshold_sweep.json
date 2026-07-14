@@ -1,0 +1,293 @@
+{
+  "n_memories": 21,
+  "identical_set_across_runs": true,
+  "per_memory_count_match": true,
+  "tp_grid": [
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5,
+    5.0
+  ],
+  "tf_grid": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "p_marginal": {
+    "2.0": {
+      "promote": 1,
+      "ev0": 0
+    },
+    "2.5": {
+      "promote": 1,
+      "ev0": 0
+    },
+    "3.0": {
+      "promote": 1,
+      "ev0": 0
+    },
+    "3.5": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "4.0": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "4.5": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "5.0": {
+      "promote": 0,
+      "ev0": 0
+    }
+  },
+  "f_marginal": {
+    "2": {
+      "promote": 6,
+      "ev0": 5
+    },
+    "3": {
+      "promote": 4,
+      "ev0": 3
+    },
+    "4": {
+      "promote": 3,
+      "ev0": 2
+    },
+    "5": {
+      "promote": 2,
+      "ev0": 1
+    },
+    "6": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "7": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "8": {
+      "promote": 0,
+      "ev0": 0
+    },
+    "9": {
+      "promote": 0,
+      "ev0": 0
+    }
+  },
+  "divergence_region": {
+    "tp": [
+      2.0,
+      5.0
+    ],
+    "tf": [
+      2,
+      5
+    ]
+  },
+  "frozen_config": {
+    "tp": 3.0,
+    "tf": 3
+  },
+  "memories": [
+    {
+      "content": "User loves badminton",
+      "ev": 0,
+      "ia": 3,
+      "total": 3,
+      "pscore": 1.103638323514327,
+      "fscore": 3.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user took a walk in the park this morning",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user bought a new badminton racket online",
+      "ev": 0,
+      "ia": 1,
+      "total": 1,
+      "pscore": 0.36787944117144233,
+      "fscore": 1.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user watched a movie with friends on Friday",
+      "ev": 0,
+      "ia": 1,
+      "total": 1,
+      "pscore": 0.36787944117144233,
+      "fscore": 1.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user plays badminton with coworkers",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user adopted a cat named Mochi",
+      "ev": 0,
+      "ia": 5,
+      "total": 5,
+      "pscore": 1.8393972058572117,
+      "fscore": 5.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user tried cooking a new recipe this weekend",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi the cat is playful and energetic",
+      "ev": 0,
+      "ia": 4,
+      "total": 4,
+      "pscore": 1.4715177646857693,
+      "fscore": 4.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user went grocery shopping this afternoon",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi loves chasing toys around the house",
+      "ev": 0,
+      "ia": 2,
+      "total": 2,
+      "pscore": 0.7357588823428847,
+      "fscore": 2.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user visited a new cafe downtown",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi sleeps on the user's bed every night",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user recently read a book about cat behavior",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi gets along well with the neighbor's cat",
+      "ev": 0,
+      "ia": 2,
+      "total": 2,
+      "pscore": 0.7357588823428847,
+      "fscore": 2.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi the cat follows the user everywhere at home",
+      "ev": 0,
+      "ia": 1,
+      "total": 1,
+      "pscore": 0.36787944117144233,
+      "fscore": 1.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user visited a friend over the weekend",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "Mochi does not like being touched",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user is considering learning to swim",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user might visit Tokyo next year",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user likes the espresso at the new coffee shop",
+      "ev": 0,
+      "ia": 0,
+      "total": 0,
+      "pscore": 0.0,
+      "fscore": 0.0,
+      "layer": "WORKING"
+    },
+    {
+      "content": "The user enjoys playing badminton on weekends",
+      "ev": 2,
+      "ia": 3,
+      "total": 5,
+      "pscore": 3.103638323514327,
+      "fscore": 5.0,
+      "layer": "CONSOLIDATED"
+    }
+  ]
+}

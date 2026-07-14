@@ -138,6 +138,27 @@ def test_capacity_evicts_lowest_persistence_score(tmp_path, monkeypatch):
     assert app.memory_store.find("high") is not None
 
 
+def test_capacity_evicts_lowest_frequency_score(tmp_path, monkeypatch):
+    """#13 修复的 frequency 路径覆盖：淘汰度量必须跟随策略 score。
+
+    mem_freq_low : 1 EV -> persistence_score 1.0,  frequency_score 1
+    mem_freq_high: 2 IA -> persistence_score 0.736, frequency_score 2
+    两条均未跨升层阈值(3)，故只触发淘汰、不触发升层。
+
+    修复后（frequency 模式跟随 frequency_score）：淘汰 freq 更低的 mem_freq_low，保留 mem_freq_high。
+    修复前（硬编码 persistence_score）：会误淘汰 persistence 更低的 mem_freq_high —— 本断言捕捉该回归。
+    """
+    monkeypatch.setattr(Config, "WORKING_CAPACITY", 1)
+    app = pipeline(tmp_path, [["different"]])
+    app.promotion_strategy = FrequencyPromotionStrategy()
+    freq_low = MemoryEntry(id="freq_low", content="fact", external_validation=1, total_activation=1)
+    freq_high = MemoryEntry(id="freq_high", content="related", internal_activation=2, total_activation=2)
+    app.memory_store.add(freq_low); app.memory_store.add(freq_high)
+    app.process("different")
+    assert app.memory_store.find("freq_low") is None
+    assert app.memory_store.find("freq_high") is not None
+
+
 def test_reorganization_audit_log_has_required_fields(tmp_path):
     app = pipeline(tmp_path, [[], []], relation="合并")
     app.memory_store.add(MemoryEntry(id="existing", content="merge-a", layer=LayerEnum.CONSOLIDATED))
