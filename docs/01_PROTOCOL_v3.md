@@ -83,6 +83,7 @@
 - **操作定义**：在把提取出的候选记忆 c 写入 working 层之前，将其与现有 working + consolidated 记忆逐一比对余弦；若最大值 ≥ `DEDUP_SIMILARITY_THRESHOLD` (0.80)，则**跳过写入**（该输入的信号已由 activation 步骤注册到既有记忆上），并记 `memory_dedup_skip` 事件（含被匹配记忆 id，供审计）。
 - **判定函数** `Dedup(c, store) = True`（跳过写入）当且仅当：`max_{m∈store} cosine(encode(c), encode(m.content)) ≥ DEDUP_SIMILARITY_THRESHOLD` (0.80)。
 - **阈值耦合（冻结）**：去重阈值与 EV 阈值共用同一嵌入空间操作带，故取同一值 0.80。若分离设值，会出现"近义输入既不被去重也不判 EV"的碎片化缝隙（实测 "went to play badminton again Saturday" vs "enjoys playing badminton on weekends" = 0.818，正好落在 0.80–0.85 之间）。去重是**实验控制变量**（消除提取混杂），不改变理论映射。
+- **记忆同一性阈值（Memory Identity Threshold）— 显式命名**：0.80 在本系统中承担一个统一角色——"什么算同一条信息"。EV 用它判断"外部输入是否确认了既有记忆"（同一信息再次到来），dedup 用它判断"新提取是否就是既有记忆"（同一信息被重新提取）。两者共用同一数值**不是巧合或混杂**，而是"系统对记忆同一性持单一判定标准"的**设计决定**：若分离设值，会在 0.80–0.85 区间产生"近义输入既不被去重、也不判 EV"的碎片化缝隙（实测 badminton 这对句 = 0.818）。该命名由两次独立外部评审收敛而来（GPT 提 "Memory Identity"，GLM 从另一方向撞上同一对象），列为 v0.2 核心议题。
 
 ---
 

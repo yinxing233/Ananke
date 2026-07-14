@@ -5,12 +5,30 @@ from ananke.models import LayerEnum, MemoryEntry
 from ananke.promotion import WorkingPromotionStrategy, promotion_strategy_from_config
 
 
-def enforce_working_capacity(memory_store, event_logger) -> None:
+def enforce_working_capacity(memory_store, event_logger, strategy=None) -> None:
+    """工作层容量淘汰。淘汰度量跟随当前激活的迁移策略（#13 修复）：
+
+    - persistence 模式 → 用 persistence_score 淘汰最低分者；
+    - frequency 模式 → 用 frequency_score 淘汰最低分者。
+
+    两种分数均为"越高越该保留"，故始终淘汰最低分者。修复前硬编码 persistence_score，
+    会使纯 Internal Selection 的淘汰条件被外部选择压力污染。
+
+    注：MVP v0.1 的 Phase 1/3 实验记忆数（21）< 工作层容量（50），淘汰从未触发，
+    既有结果不受此修复影响；此修复仅为逻辑自洽。
+    """
+    if strategy is None:
+        strategy = promotion_strategy_from_config()
     working = memory_store.get_working_memories()
     while len(working) > Config.WORKING_CAPACITY:
-        evicted = min(working, key=lambda memory: memory.persistence_score)
+        evicted = min(working, key=lambda memory: strategy.score(memory))
         memory_store.remove(evicted)
-        event_logger.log("working_eviction", memory_id=evicted.id, persistence_score=evicted.persistence_score)
+        event_logger.log(
+            "working_eviction",
+            memory_id=evicted.id,
+            strategy=strategy.name,
+            eviction_score=strategy.score(evicted),
+        )
         working.remove(evicted)
 
 

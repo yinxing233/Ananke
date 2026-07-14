@@ -43,7 +43,7 @@ class MemoryPipeline:
             written.append(memory)
             existing_cache.append(memory)
             existing_vecs.append(candidate_vec)
-        enforce_working_capacity(self.memory_store, self.event_logger)
+        enforce_working_capacity(self.memory_store, self.event_logger, self.promotion_strategy)
         consolidated = promote_working_memories(self.memory_store, self.event_logger, self.promotion_strategy)
         reorganizations = []
         for memory in consolidated:

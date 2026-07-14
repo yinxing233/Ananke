@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -69,6 +70,11 @@ def main() -> None:
         choices=["persistence", "frequency"],
         help="覆盖迁移策略（Phase 3 对照实验用；默认用 Config.WORKING_PROMOTION_STRATEGY）",
     )
+    ap.add_argument(
+        "--clean",
+        action="store_true",
+        help="运行前清空 --data 目录，避免残留状态污染实验结果（GLM #7 防护）",
+    )
     args = ap.parse_args()
 
     if args.strategy:
@@ -78,6 +84,15 @@ def main() -> None:
     if not corpus:
         print(f"[warn] 语料 {args.corpus} 为空或无有效输入。")
         return
+
+    # 数据目录预清理防护（GLM #7）：避免残留状态污染实验结果。
+    data_path = Path(args.data)
+    if args.clean:
+        if data_path.exists():
+            shutil.rmtree(data_path)
+            print(f"[clean] 已清空数据目录 {args.data}")
+    elif data_path.exists() and any(data_path.glob("*.jsonl")):
+        print(f"[warn] 数据目录 {args.data} 非空，可能存在状态污染；加 --clean 清空后重跑。")
 
     # 真实组件
     embedding = EmbeddingEngine(Config.EMBEDDING_MODEL)

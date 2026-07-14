@@ -32,7 +32,7 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
   - persistence（External Selection）→ 升巩固层 **1 次**（badminton，EV=2，persist=3.10）。
   - frequency（Internal Selection）→ 升巩固层 **4 次**（badminton + 3 条 **EV 全为 0** 的记忆："User loves badminton" / "The user adopted a cat named Mochi" / "Mochi the cat is playful and energetic"）。这 3 条正是 persistence 跑里**同一记忆对象**停留快层者（persist 1.10/1.84/1.47）。
   - 两遍提取记忆集完全一致（各 21 条，交集 21）→ 唯一变量 = Migration Rule，比较器有效。
-  - 解读：External Selection 升层记忆全部 EV>0（受环境约束、稳定）；Internal Selection 把零外部验证、选择压力纯自循环的记忆也推上巩固层——协议 §5 预测的"退化为内部自循环、易被破坏的不稳定结构"。这是约束场理论在真实语义环境的**首份 Phase 3 证据**。日志 `logs/phase3_persist.jsonl`+`data/phase3_persist` / `logs/phase3_freq.jsonl`+`data/phase3_freq`；报告 `logs/phase3_persist_report.html` / `logs/phase3_freq_report.html`；对比脚本 `logs/_phase3_compare.py`。
+  - 解读：External Selection 升层记忆全部 EV>0（受环境约束、稳定）；Internal Selection 把零外部验证、选择压力纯自循环的记忆也推上巩固层——协议 §5 预测的"退化为内部自循环、易被破坏的不稳定结构"。这是约束场理论在真实语义环境的 **Phase 3 先导实验（pilot）**——稳定性尚未测量（协议 §5 真比较器未执行，见 RELEASE 诚实边界）。日志 `logs/phase3_persist.jsonl`+`data/phase3_persist` / `logs/phase3_freq.jsonl`+`data/phase3_freq`；报告 `logs/phase3_persist_report.html` / `logs/phase3_freq_report.html`；对比脚本 `logs/_phase3_compare.py`。
   - 边界：本实验是 Phase 3 第一片（策略切换的动力学差异）。协议 §5 完整 Phase 3 还需"世界演化"语料比较存活记忆 vs 后期外部发展一致性——未做，列入待议。
 - Phase 2 闭环（Reply）未接。
 
