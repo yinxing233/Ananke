@@ -69,6 +69,17 @@
 - **最有价值的动作：阈值敏感性离线回放（零 LLM 成本）**。R1 暴露"结论是否对阈值敏感"可离线回答——逐记忆 EV/IA/total 已持久化在 `data/phase3_{persist,freq}/`。写 `tools/threshold_sweep.py`：读取两遍计数、验证 21=21 可复现（逐记忆一致，经验事实非逻辑必然），在 persistence×frequency 阈值网格重算升层判定。结果：**发散区是连续矩形** Tp∈[2.0,5.0]×Tf∈[2,5]（28/56=50% 网格，含冻结配置 3.0/3），证明头条分歧非单点巧合；仅在 Tf≥6（本语料最大激活=5，全不升层）或 Tp≤1.84（persistence 自身背叛 External Selection）时消失。输出 `logs/threshold_sweep.json`，相图与解读写入 `EXPERIMENT_REPORT.md §⑥`。
 - **v0.1 形态因此进化为**：单点结果 + 阈值敏感性分析 + 诚实边界——GLM 两轮回溯完整转化为报告的防御纵深。此轮修正重新定稿 v0.1 tag（旧冻结 commit d064bca 与上一轮 67fc66d 均保留在 history 可审计），仍未 push，待 PI 确认。
 
+## GLM 第三轮 / Claude 复核 + 强/弱双判据 + 路径无关性（v0.1 最终收尾）
+
+Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.839、Tp≥3.5 时 persistence 升 0 条），但指出两个 push 前必修的小问题：
+
+- **问题1（相图一半是退化格，50% 撑不住）**：原发散判据"frequency 升≥1 EV=0 且 persistence 升 0 EV=0"在 persistence 整段瘫痪（Tp≥3.5）时被平凡满足——Tp∈[3.5,5.0] 四行（16/28 格）是"persistence 不工作"而非"两系统分歧"。GLM 第三轮会精确打这里。
+  - **修法**：加**强发散判据** = persistence 升≥1 EV>0 **且** frequency 升≥1 EV=0（两系统都在跑、真实分歧）。结果：弱发散 Tp∈[2.0,5.0]×Tf∈[2,5]=28/56=50%（含退化格）；**强发散 Tp∈[2.0,3.0]×Tf∈[2,5]=12/56≈21%（防御得住）**，两者都含冻结配置 (3.0,3)。报告 §⑥ 改为双数字表述+解释退化格区别。21% 比 50% 弱，但是经得起第三轮审查的 21%。
+- **问题2（回放路径无关性假设未声明，但已有经验证据）**：回放"复用计数、只变阈值"隐含"计数对阈值路径无关"。本系统按构造成立（activation/dedup 扫 working+consolidated 两层、升层早晚不改计数、淘汰未触发 21<50）；且**直接经验证据**：persist 与 freq 两遍升层时点/条数不同（1 vs 4）但逐记忆 (EV,IA,total) 计数逐字节一致（`per_memory_count_match=true`）。脚本 docstring + 报告 §⑥ 显式声明 + 该经验论证，漏洞→预先封堵边界。
+- **工具改动**：`tools/threshold_sweep.py` 增 `weak_cell`/`strong_cell`/`region_of`，打印三级相图（S/w/.）与双区域百分比，json 输出 `weak_*`/`strong_*`/`path_independence` 字段（删模糊的 `divergence_region`）。
+- **文档同步**：RELEASE §已知限制、报告 §④/§⑤/§⑥ 全改为双数字；研究日志本轮不回改 round-2 条目（历史日志保持时序），仅追加本节的强/弱澄清。
+- **收尾决策（PI + GPT 同意）**：v0.1 经三轮完整审查消化，第三轮起边际收益低于日历成本，剩余问题全归 Future Work；本轮回放修正后定稿 v0.1 并 push。
+
 ## Agent 自我认领的历史漂移（已纠正）
 - 把"接真实 LLM"话术为"系统能工作"（能力视角，非理论视角）。
 - 推"检索增强回复演示"理由为演示 / 体验（标准漂移样本）。

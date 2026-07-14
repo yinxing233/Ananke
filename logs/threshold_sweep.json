@@ -24,68 +24,83 @@
   "p_marginal": {
     "2.0": {
       "promote": 1,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 1
     },
     "2.5": {
       "promote": 1,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 1
     },
     "3.0": {
       "promote": 1,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 1
     },
     "3.5": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "4.0": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "4.5": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "5.0": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     }
   },
   "f_marginal": {
     "2": {
       "promote": 6,
-      "ev0": 5
+      "ev0": 5,
+      "ev_gt0": 1
     },
     "3": {
       "promote": 4,
-      "ev0": 3
+      "ev0": 3,
+      "ev_gt0": 1
     },
     "4": {
       "promote": 3,
-      "ev0": 2
+      "ev0": 2,
+      "ev_gt0": 1
     },
     "5": {
       "promote": 2,
-      "ev0": 1
+      "ev0": 1,
+      "ev_gt0": 1
     },
     "6": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "7": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "8": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     },
     "9": {
       "promote": 0,
-      "ev0": 0
+      "ev0": 0,
+      "ev_gt0": 0
     }
   },
-  "divergence_region": {
+  "weak_divergence_region": {
     "tp": [
       2.0,
       5.0
@@ -95,9 +110,35 @@
       5
     ]
   },
+  "weak_cells": 28,
+  "weak_fraction": 0.5,
+  "strong_divergence_region": {
+    "tp": [
+      2.0,
+      3.0
+    ],
+    "tf": [
+      2,
+      5
+    ]
+  },
+  "strong_cells": 12,
+  "strong_fraction": 0.21428571428571427,
   "frozen_config": {
     "tp": 3.0,
     "tf": 3
+  },
+  "frozen_inside_weak": true,
+  "frozen_inside_strong": true,
+  "path_independence": {
+    "assumption": "EV/IA/total counts are path-independent w.r.t. the promotion threshold",
+    "why_holds_by_construction": [
+      "activation scans working+consolidated layers; promotion timing does not change what is scanned or counted",
+      "dedup compares against both layers the same way",
+      "eviction never triggered in the actual runs (21 memories < capacity 50)"
+    ],
+    "empirical_evidence": "the persistence and frequency runs promoted at different times and in different numbers (1 vs 4), yet their per-memory (EV, IA, total) counts are byte-for-byte identical (per_memory_count_match=true)",
+    "per_memory_count_match": true
   },
   "memories": [
     {
