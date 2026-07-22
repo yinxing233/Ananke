@@ -125,6 +125,8 @@ def main() -> None:
     ap.add_argument("--index", type=int, default=None, help="按列表下标选对话（0-based）")
     ap.add_argument("--out-corpus", default=None, help="语料 .jsonl 输出路径")
     ap.add_argument("--out-probes", default=None, help="探针 .jsonl 输出路径")
+    ap.add_argument("--max-turns", type=int, default=None,
+                    help="微型冒烟：仅取前 N 条轮次（按 session 升序、session 内轮次序）；探针仍全量")
     args = ap.parse_args()
 
     data = json.loads(Path(args.data).read_text(encoding="utf-8"))
@@ -156,6 +158,13 @@ def main() -> None:
     sid = sample["sample_id"]
     out_corpus = Path(args.out_corpus) if args.out_corpus else Path(f"data/locomo/{sid}_corpus.jsonl")
     out_probes = Path(args.out_probes) if args.out_probes else Path(f"data/locomo/{sid}_probes.jsonl")
+    if args.max_turns is not None:
+        if args.max_turns <= 0:
+            raise SystemExit("[err] --max-turns 须为正整数")
+        truncated = corpus[: args.max_turns]
+        print(f"     [截断] --max-turns={args.max_turns}: 语料 {len(corpus)} -> {len(truncated)} 条轮次"
+              f"（探针仍全量 {len(probes)}；微型冒烟仅验证管道+节流器跑通，非测量效力）")
+        corpus = truncated
     _write_jsonl(corpus, out_corpus)
     _write_jsonl(probes, out_probes)
 

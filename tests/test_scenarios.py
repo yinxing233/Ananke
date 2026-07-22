@@ -520,3 +520,27 @@ def test_protocol_2_5_core_promotion_only_via_merge_trigger(tmp_path):
     ))
     pipe.process("input", session_id="s2")
     assert pipe.memory_store.find("e").layer is LayerEnum.CORE
+
+
+def test_ratelimiter_zero_rpm_nonblocking():
+    """rpm<=0 不节流：acquire 立即返回，不 sleep（如 deepseek 评估端默认）。"""
+    from ananke.llm_client import _RateLimiter
+    import time
+    rl = _RateLimiter(0)
+    t0 = time.time()
+    for _ in range(5):
+        rl.acquire()
+    assert time.time() - t0 < 0.5
+
+
+def test_ratelimiter_positive_rpm_burst_capacity():
+    """rpm>0：capacity=rpm，前 rpm 次 acquire 立即可用（突发额度），rate 属性正确。"""
+    from ananke.llm_client import _RateLimiter
+    import time
+    rl = _RateLimiter(30)
+    assert rl.rate == 0.5          # 30/60
+    assert rl.capacity == 30
+    t0 = time.time()
+    for _ in range(30):            # 恰好 capacity，全应立即可用
+        rl.acquire()
+    assert time.time() - t0 < 0.5

@@ -63,6 +63,10 @@ class Config:
     LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")  # 留空则使用 provider SDK 默认值
     LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
+    # RPM 节流（I/O 韧性，不影响理论行为）：控制驱动端每分钟请求数，防撞 gemini 限流。
+    # 默认 30（用户确认其 key = 30 rpm 免费层上限）；如限额更高可调 LLM_RPM 上调。
+    # 纯预防性节流，与 call_llm 内 429 指数退避互补（退避=撞墙后恢复，节流=不撞墙）。
+    LLM_RPM = int(os.getenv("LLM_RPM", "30"))
 
     # 开发开关：True 时使用 Mock LLM（不联网、不需要密钥，秒级跑通迁移/激活逻辑）
     USE_MOCK_LLM = _as_bool(os.getenv("USE_MOCK_LLM"), default=True)

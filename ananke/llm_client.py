@@ -16,11 +16,43 @@
 
 from __future__ import annotations
 
+import threading
 import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
 from ananke.config import Config
+
+
+class _RateLimiter:
+    """Token-bucket RPM 节流器。纯 I/O 韧性，不影响任何理论行为。
+
+    与 call_llm 内的 429 指数退避互补：退避是「撞墙后恢复」，节流是「预防性不撞墙」。
+    rpm<=0 表示不节流（如 deepseek 评判端限额高）。
+    """
+
+    def __init__(self, rpm: int) -> None:
+        self.rpm = float(rpm)
+        self.rate = self.rpm / 60.0 if self.rpm > 0 else 0.0
+        self.capacity = max(int(self.rpm), 1)
+        self.tokens = float(self.capacity)
+        self.last = time.time()
+        self._lock = threading.Lock()
+
+    def acquire(self) -> None:
+        if self.rate <= 0:
+            return
+        while True:
+            with self._lock:
+                now = time.time()
+                self.tokens = min(self.capacity, self.tokens + (now - self.last) * self.rate)
+                self.last = now
+                if self.tokens >= 1.0:
+                    self.tokens -= 1.0
+                    return
+                wait = (1.0 - self.tokens) / self.rate
+            time.sleep(wait + 0.01)
+
 
 # 所有走 OpenAI 兼容 Chat Completions 接口的服务商都归到这一类，仅靠 base_url 区分。
 _OPENAI_COMPATIBLE = {"openai", "deepseek", "openrouter", "groq", "ollama", "openai-compatible", "gemini"}
@@ -72,11 +104,15 @@ class OpenAICompatibleClient(BaseLLMClient):
         base_url: Optional[str] = None,
         model: Optional[str] = None,
         temperature: Optional[float] = None,
+        rpm: Optional[int] = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else Config.LLM_API_KEY
         self.base_url = base_url if base_url is not None else Config.LLM_BASE_URL
         self.model = model if model is not None else Config.LLM_MODEL
         self.temperature = temperature if temperature is not None else Config.LLM_TEMPERATURE
+        # RPM 节流（I/O 韧性）：未显式传 rpm 时用 Config.LLM_RPM（驱动端默认 30）。
+        # 评判端传 rpm=Config.EVAL_LLM_RPM（默认 0=不限，因默认 deepseek）。
+        self._limiter = _RateLimiter(rpm if rpm is not None else Config.LLM_RPM)
         # 延迟导入，避免未安装 openai 时影响 mock 模式 / 测试。
         from openai import OpenAI
 
@@ -96,6 +132,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         # 保证任意长度语料都能跑完。仅 I/O 韧性，不影响任何理论行为。
         from openai import RateLimitError
 
+        self._limiter.acquire()  # 预防性 RPM 节流（纯 I/O 韧性，不影响理论行为）
         delay = 8.0
         last_err: Optional[Exception] = None
         for attempt in range(6):
@@ -152,6 +189,7 @@ def create_eval_llm_client() -> BaseLLMClient:
             base_url=Config.EVAL_LLM_BASE_URL or None,
             model=Config.EVAL_LLM_MODEL,
             temperature=0.0,
+            rpm=Config.EVAL_LLM_RPM,
         )
     raise ValueError(
         f"不支持的 EVAL_LLM_PROVIDER={provider!r}。"
