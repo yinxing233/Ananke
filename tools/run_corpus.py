@@ -13,15 +13,20 @@ system_guided=False 保证）。
 用法：
     # 先把 Gemini key 写进 .env，设 USE_MOCK_LLM=false
     uv run python tools/run_corpus.py corpus.txt
-    uv run python tools/run_corpus.py corpus.jsonl --log logs/real_events.jsonl
-    # Phase 3 对照：同语料跑两遍，仅切迁移策略
-    uv run python tools/run_corpus.py corpus.txt --strategy persistence
-    uv run python tools/run_corpus.py corpus.txt --strategy frequency --log logs/freq_events.jsonl
+    uv run python tools/run_corpus.py corpus_phase2.jsonl --log logs/real_events.jsonl
+    # 会话感知语料：.jsonl 含 {session_id, input}；.txt 用 `# session: N` 标记
+    # v0.2 分歧集对照：同语料跑两遍，仅切迁移策略（结果供 tools/divergence_analysis.py）
+    uv run python tools/run_corpus.py corpus_phase2.jsonl --strategy persistence --data data/p --clean
+    uv run python tools/run_corpus.py corpus_phase2.jsonl --strategy frequency --data data/f --clean
+    uv run python tools/evaluate.py --data data/p --probes corpus_phase2_probes.jsonl --strategy persistence --tag p
+    uv run python tools/evaluate.py --data data/f --probes corpus_phase2_probes.jsonl --strategy frequency   --tag f
+    uv run python tools/divergence_analysis.py --eval-p logs/eval_p.json --eval-f logs/eval_f.json
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -38,10 +43,19 @@ from ananke.memory_store import MemoryStore
 from ananke.pipeline import MemoryPipeline
 
 
-def load_corpus(path: Path) -> list[str]:
-    """支持 .jsonl（每行含 input/text/user 字段）或纯文本（每行一条输入）。"""
+def load_corpus(path: Path) -> list[tuple[str, str | None]]:
+    """加载语料，返回 [(input_text, session_id), ...]。
+
+    支持三种格式：
+    - .jsonl 每行含 {session_id, input}（或 {session/text/user/content}）。
+    - .txt 含 `# session: N` 标记行，标记后直至下一个标记的归该 session。
+    - 纯 .txt 无标记 → 全部归默认 session "s1"（无跨 session，EV 不会触发，
+      仅用于 IA/dedup 演示）。
+    """
     text = path.read_text(encoding="utf-8")
-    inputs: list[str] = []
+    items: list[tuple[str, str | None]] = []
+    default_session = "s1"
+    current_session: str | None = default_session
     if path.suffix == ".jsonl":
         for line in text.splitlines():
             line = line.strip()
@@ -49,14 +63,20 @@ def load_corpus(path: Path) -> list[str]:
                 continue
             obj = json.loads(line)
             val = obj.get("input") or obj.get("text") or obj.get("user") or obj.get("content")
+            sid = obj.get("session_id") or obj.get("session") or obj.get("sid")
             if isinstance(val, str) and val.strip():
-                inputs.append(val.strip())
+                items.append((val.strip(), sid))
     else:
         for line in text.splitlines():
             line = line.strip()
-            if line:
-                inputs.append(line)
-    return inputs
+            if not line:
+                continue
+            marker = re.match(r"^#\s*session\s*:?\s*(\S+)\s*$", line, re.IGNORECASE)
+            if marker:
+                current_session = marker.group(1)
+                continue
+            items.append((line, current_session))
+    return items
 
 
 def main() -> None:
@@ -104,16 +124,18 @@ def main() -> None:
         EventLogger(args.log),
     )
 
+    sessions = sorted({sid for _, sid in corpus if sid})
     print(f"[info] 真实 LLM 模式: {type(llm).__name__} | 嵌入模型: {Config.EMBEDDING_MODEL}")
-    print(f"[info] 迁移策略: {Config.WORKING_PROMOTION_STRATEGY} | 语料条数: {len(corpus)}")
+    print(f"[info] 迁移策略: {Config.WORKING_PROMOTION_STRATEGY} | 语料条数: {len(corpus)} | session 数: {len(sessions)}")
     print(f"[info] 日志 → {args.log}\n")
 
-    for i, line in enumerate(corpus, 1):
-        result = pipeline.process(line)
+    for i, (line, session_id) in enumerate(corpus, 1):
+        result = pipeline.process(line, session_id=session_id)
         n_write = len(result["written"])
         n_consol = len(result["consolidated"])
         n_core = len(result["core"])
-        print(f"[{i:>3}/{len(corpus)}] +{n_write}记忆 | 升巩固层 {n_consol} | 升慢层 {n_core} | {line[:30]}")
+        tag = f"[{session_id}]" if session_id else ""
+        print(f"[{i:>3}/{len(corpus)}]{tag} +{n_write}记忆 | 升巩固层 {n_consol} | 升慢层 {n_core} | {line[:30]}")
 
     print(f"\n[done] 完成。分析: uv run python tools/analyze_trajectory.py --log {args.log} --data {args.data}")
 

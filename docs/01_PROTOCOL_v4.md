@@ -76,8 +76,8 @@ v3 死结（REORG⊂DEDUP拦截区）与 EV 污染（矛盾计为验证）是同
 | ---------- | --------------------------- | ---------------------------------------------------------------- |
 | duplicate  | 来源为跨 session 输入（§3） | EV +1，不写入（去重）                                            |
 | duplicate  | 来源为同 session 输入       | 去重，不计任何信号                                               |
-| contradict | —                           | conflict trigger（进入重组流程）                                 |
-| mergeable  | —                           | local_reorganization_trigger +1                                  |
+| contradict | —                           | ① 受体 conflict trigger +1；② **新断言写入快层**并与受体建**双向 conflict 链接**（漂移2 修正：系统须能更新世界状态）；③ 受体 conflict_trigger>0 即成为 CORE **晋升阻断器**（见下） |
+| mergeable  | —                           | local_reorganization_trigger +1（**不写**新记忆，信息多为冗余，留债） |
 | related    | 同 session                  | IA +1                                                            |
 | related    | 跨 session                  | IA +1 [注：跨session的related是否应计EV，挂起至v5，当前保守处理] |
 | unrelated  | —                           | 正常写入快层                                                     |
@@ -90,6 +90,19 @@ EV/IA 互斥原则（v2 决策）保留：每条记忆每轮至多触发一个�
 DEDUP 与 REORG 不再共享余弦轴。duplicate 命中即去重（含EV判定），
 contradict/mergeable 直接进入重组——重组信号不再经过 dedup 丢弃堆。
 v3 推荐的方向三由本结构自然吸收。
+
+### 2.5 CORE 晋升阻断器（Fable5 漂移1 修正）
+
+中→慢闸（consolidated→core）晋升**唯一条件** = 受体 local_reorganization_trigger
+≥ LOCAL_REORG_THRESHOLD（mergeable 累积，代表被反复确认/合并的稳定结构）。
+**conflict_trigger > 0 的记忆不得升 CORE，冻结在中层直到矛盾被裁决。**
+
+理由：v3 的病根是"把被外部输入接触当成被外部输入确认"（矛盾被余弦 EV 计为验证，
+污染快→中迁移）。本结构已在**第一道闸**用关系分类杀死了它；但若允许矛盾两次→升
+CORE，等于在**第二道闸亲手重建同一错误**——一条被矛盾两次的记忆是"正在被检验且检验
+失败中"的结构，送进最稳定层是方向性反转，且 LoCoMo 自然语料中改口/更新高频，被争议
+记忆将批量涌入 CORE，直接污染验证阶段测量。故 conflict 从"晋升信号"改为"晋升阻断器"。
+（阻断器与 --strategy 无关；若未来需恢复矛盾路径，须先有裁决环节，属 v0.3+ 设计。）
 
 ---
 
@@ -142,6 +155,18 @@ LoCoMo 为静态语料回放，系统是被动观察者，agent 输出不影响
 
 - P = persistence 策略升层集合，F = frequency 策略升层集合。
 - 分歧集 D = (P\F) ∪ (F\P)。主分析对象为 D，非聚合指标。
+- **测量范围（PI 追认，Fable5 漂移3）**：D 仅在 **working→consolidated 第一道闸** 测量。
+  中→慢闸（consolidated→core）对两策略走**同一逻辑**（晋升条件不含 --strategy，
+  仅受 merge trigger / conflict 阻断器约束），故对 D **零贡献**。这是**收窄测量范围**的
+  显式决策（把比较限定在第一道闸），非实现默认——记录为 PI 签字项。若未来要在第二道闸
+  也比较，须先解决 §2.5 冲突路径的未决语义，属 v0.3+。
+- **跨运行同一性判据（Fable5 漂移4）**：两次独立运行里同一条事实会生成不同 UUID，D 比对
+  **按归一化内容键**对齐，规则如下（实现见 tools/divergence_analysis._norm）：
+  - 小写化；
+  - 去除所有非字母数字/非空白字符（即去标点；`\w` 在 unicode 下覆盖中文）；
+  - 折叠连续空白并去首尾空白。
+  - **改写容忍度不在 v0.2 范围**：两条表述同一事实但措辞不同的记忆，归一化后仍判为两条
+    分歧（假阳性）。此为已知限制，v0.3+ 引入语义聚类消解。
 - 核心测量：D 中两侧独有升层记忆的 evidence 命中率
   （命中 = 主裁判判定"包含"或"部分"，"部分"的计法待冒烟后定）。
 - 机制签名检查：F\P 中 EV=0 记忆的富集度及其命中率。

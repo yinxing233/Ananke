@@ -74,10 +74,15 @@ def load_records(log_path: Path) -> list[dict]:
 
 
 def group_by_memory(records: list[dict]) -> dict[str, list[dict]]:
-    """按 memory_id 聚合；local_reorganization 用 trigger_memory_id 归属到触发源。"""
+    """按 memory_id 聚合（v4 召回-分类：local_reorganization 用 recipient_memory_id
+    归属到**被检验的受体记忆**，因 v4 采用受体语义——记忆 A 因被反复重组/矛盾而升慢层）。"""
     grouped: dict[str, list[dict]] = defaultdict(list)
     for rec in records:
-        mid = rec.get("memory_id") or rec.get("trigger_memory_id")
+        e = rec.get("event")
+        if e == "local_reorganization":
+            mid = rec.get("recipient_memory_id") or rec.get("trigger_memory_id") or rec.get("memory_id")
+        else:
+            mid = rec.get("memory_id") or rec.get("trigger_memory_id")
         if not mid:
             continue
         grouped[mid].append(rec)
@@ -129,10 +134,24 @@ def state_trace_str(trace: list[dict]) -> str:
     return " → ".join(f"{t['layer']}({t['score']:.2f})" for t in trace)
 
 
-def final_counts(events: list[dict]) -> tuple[int, int]:
-    ext = max([e.get("external_validation", 0) for e in events if e["event"] == "external_validation"] + [0])
-    intl = max([e.get("internal_activation", 0) for e in events if e["event"] == "internal_activation"] + [0])
-    return ext, intl
+def final_counts(events: list[dict], store=None, mid: str | None = None) -> tuple[int, int, int, int]:
+    """返回 (ev, intl, local_reorg_trigger, conflict_trigger)。
+
+    v4 采用召回-分类，不再有 internal_activation 事件；冲突累积在 conflict_trigger。
+    优先从 MemoryStore 读取最终态（最权威），缺失时回退到事件计数。
+    """
+    mem = store.find(mid) if (store is not None and mid) else None
+    if mem is not None:
+        return (
+            mem.external_validation,
+            mem.internal_activation,
+            mem.local_reorganization_trigger,
+            getattr(mem, "conflict_trigger", 0),
+        )
+    ev = max([e.get("external_validation", 0) for e in events if e["event"] == "external_validation"] + [0])
+    lrt = sum(1 for e in events if e["event"] == "local_reorganization" and e.get("action") == "mergeable")
+    ct = sum(1 for e in events if e["event"] == "local_reorganization" and e.get("action") == "contradict")
+    return ev, 0, lrt, ct
 
 
 def failure_samples(grouped: dict[str, list[dict]], content_map: dict[str, str], store=None) -> list[str]:
@@ -145,7 +164,7 @@ def failure_samples(grouped: dict[str, list[dict]], content_map: dict[str, str],
         fl = final_layer(evs)
         if fl == "CORE":
             continue
-        ext, intl = final_counts(evs)
+        ext, intl, lrt, ct = final_counts(evs, store, mid)
         score = ext * EXTERNAL_W + intl * INTERNAL_W
         content = (content_map.get(mid, "") or "(无内容)")[:22]
         if fl == "EVICTED":
@@ -162,17 +181,10 @@ def failure_samples(grouped: dict[str, list[dict]], content_map: dict[str, str],
                 f"若无新的外部验证将保持此状态"
             )
         elif fl == "CONSOLIDATED":
-            trig = 0
-            if store is not None:
-                mem = store.find(mid)
-                if mem is not None:
-                    trig = mem.local_reorganization_trigger
-            if trig == 0:
-                # 兜底：从重组事件计数（trigger_memory_id 指向该记忆）
-                trig = sum(1 for e in evs if e["event"] == "local_reorganization")
             out.append(
-                f"  · 停留巩固层: 「{content}」 — local_reorganization_trigger={trig} "
-                f"（需 ≥ {Config.LOCAL_REORG_THRESHOLD} 才进慢层）"
+                f"  · 停留巩固层: 「{content}」 — local_reorganization_trigger={lrt} "
+                f"(mergeable), conflict_trigger={ct} (contradict)；"
+                f"任一项 ≥ {Config.LOCAL_REORG_THRESHOLD}/{Config.CONFLICT_TRIGGER_THRESHOLD} 才进慢层"
             )
     return out
 
@@ -233,17 +245,17 @@ def _event_title(ev: dict) -> str:
     e = ev["event"]
     t = ev.get("timestamp", "")
     if e == "memory_write":
-        return f"[{t}] 写入\n{ev.get('content_summary','')}"
-    if e == "internal_activation":
-        return f"[{t}] 内部激活 #{ev.get('internal_activation')}\ncosine={ev.get('cosine_similarity')}\n{ev.get('input_summary','')}"
+        return f"[{t}] 写入 (session {ev.get('session_id','?')})\n{ev.get('content_summary','')}"
     if e == "external_validation":
-        return f"[{t}] 外部验证 #{ev.get('external_validation')}\ncosine={ev.get('cosine_similarity')}\n{ev.get('input_summary','')}"
+        return f"[{t}] 外部验证 #{ev.get('external_validation')} (跨session={ev.get('cross_session')})\nrelation={ev.get('relation')}\n{ev.get('input_summary','')}"
     if e == "working_to_consolidated":
         return f"[{t}] 升巩固层\nstrategy={ev.get('migration_strategy')} score={ev.get('migration_score')}\npersist={ev.get('persistence_score')} freq={ev.get('frequency_score')}"
     if e == "consolidated_to_core":
-        return f"[{t}] 升慢层\ntrigger={ev.get('local_reorganization_trigger')}"
+        return f"[{t}] 升慢层\ntrigger(merge)={ev.get('local_reorganization_trigger')} conflict={ev.get('conflict_trigger')}"
     if e == "local_reorganization":
-        return f"[{t}] 局部重组: {ev.get('action')}\n配对 {ev.get('paired_memory_id','')[:8]}\ncosine={ev.get('cosine_similarity')}"
+        return f"[{t}] 重组: {ev.get('action')} (relation={ev.get('relation')})\n受体 {ev.get('recipient_memory_id','')[:8]} ← 候选 {ev.get('memory_id','')[:8]}"
+    if e == "memory_dedup_skip":
+        return f"[{t}] 去重跳过\nsimilarity={ev.get('max_similarity')} relation={ev.get('relation')} cross={ev.get('cross_session')}"
     if e == "working_eviction":
         return f"[{t}] 淘汰\npersist={ev.get('persistence_score')}"
     return f"[{t}] {e}"

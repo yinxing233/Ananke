@@ -43,3 +43,62 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 - `uv run python run.py`（mock 交互）
 - `uv run python tools/run_corpus.py corpus.txt`（真实语料）
 - `uv run python tools/analyze_trajectory.py --log logs/events.jsonl --data data`（分析）
+
+---
+
+## v0.2 实现状态（2026-07-22，协议 v4 草案 = MVP v0.2，**代码已完成、待冒烟校准**）
+
+> 协议 v4 是**草案、未冻结**。本段记录代码已落地的事实；协议多处 `[待冒烟校准]`（R_RECALL、分类器甲/乙、"部分包含"计分、验证集锁定）仍待真实语料冒烟后填 §8 冻结条件。代码按"探索阶段允许校准"的纪律实现，开放参数给了合理初值。
+>
+> **2026-07-22 Fable5 审查后修正（四项漂移，均已在冒烟前完成）**：详见 `docs/03_RESEARCH_LOG.md`。简述：
+> - **漂移1（最重，理论倒置）**：原 `conflict_trigger≥2 → 升 CORE` 是 v3「矛盾计为验证」EV 污染在第二道闸复活。改为 `conflict_trigger>0` = **CORE 晋升阻断器**（原则B：CORE 装经受住检验者，被矛盾=检验失败）。详见协议 §2.5。
+> - **漂移2（更新能力）**：contradict 命中时新断言**写入快层 + 与受体建双向 conflict 链接**（系统须能更新世界状态），否则验证阶段命中率在含改口事实上系统性失真。mergeable 仍不写（冗余，留债）。
+> - **漂移3（PI 追认）**：中→慢闸对两策略走同一逻辑，对分歧集 D 零贡献；**追认 D 仅测 working→consolidated 第一道闸**，写入 §6。
+> - **漂移4（协议化）**：跨运行同一性判据「归一化内容比对」的规则（小写+去标点+折叠空白）成文入 §6，`tools/divergence_analysis._norm` 与之对齐。
+
+### 架构变更（v3→v4）：余弦判定 → 召回-分类两段式
+v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构升级**自然解除**，方向三作废：
+1. **召回（recall）**：新记忆 m 与既有 working+consolidated 记忆 e 余弦 ≥ `R_RECALL`(=0.65) 才进入下一步。
+2. **分类（classification）**：关系分类器对 (m, e) 判 5 类：`duplicate / contradict / mergeable / related / unrelated`（协议 v4 §2.2）。
+3. **信号映射（v4 §2.3，受体语义 recipient semantics）**：
+   - duplicate → 跨 session 则 `external_validation +1`（且 `total_activation +1`）；同 session 仅去重；**不写**新记忆。
+   - contradict → 受体 `conflict_trigger +1`；**写**新断言并与受体建**双向 conflict 链接**（漂移2 修正）；受体 `conflict_trigger>0` 即成为 CORE 晋升阻断器。
+   - mergeable → 受体 `local_reorganization_trigger +1`；**不写**新记忆（信息多为冗余，留债）。
+   - related → 受体 `internal_activation +1`；写新记忆（enrichment）。
+   - unrelated → 写新记忆。
+   - 写入规则：**不写 = duplicate（去重）+ mergeable（冗余）**；**写 = related / unrelated / contradict**。
+
+### 中→慢闸（consolidated→core）：唯一晋升 = merge trigger，conflict = 阻断（v4 §2.5）
+`migration.promote_consolidated_memories`：受体 `local_reorganization_trigger ≥ LOCAL_REORG_THRESHOLD(2)` → 升 CORE；`conflict_trigger > 0` → **冻结在中层**（`core_promotion_blocked` 事件），直到矛盾被裁决。core 晋升**与 --strategy 无关**（v4 分歧改在整体升层集 D 上测，且经 PI 追认 D 仅限第一道闸，见 §6）。
+
+### 模块清单（ananke/，v0.2 新增/改动）
+- **新增 `relation.py`**：`LLMRelationClassifier`（方案乙，复用 llm_client，`RELATION_CLASSIFIER_SCHEME=llm|nli`）+ `MockRelationClassifier`（确定性测试）。
+- **改写 `pipeline.py`**：`process()` 走召回-分类；保留 working→consolidated 策略切换（`promotion_strategy` 槽）；新增 `relation_classifier` 注入 + `_link_conflict()`（双向矛盾链接）。
+- **改写 `reorganization.py`**：`apply_relation_event(recipient, action)` 受体语义累加 trigger + 记 `local_reorganization`。
+- **改写 `migration.py`**：`promote_consolidated_memories` 仅 merge trigger 晋升；conflict 阻断（记 `core_promotion_blocked`）。
+- **`models.py`**：`MemoryEntry` 加 `session_id`（创建 session）、`conflict_trigger`、`conflict_links: List[str]`（双向矛盾链接）字段。
+- **`config.py`**：加 `R_RECALL=0.65`、`RELATION_CLASSIFIER_SCHEME`、`EVAL_LLM_*`、`EVAL_PARTIAL_CREDIT=0.5`；`LOCAL_REORG_THRESHOLD=2`；**删除 `CONFLICT_TRIGGER_THRESHOLD`**（old 晋升逻辑，漂移1 已删）；v3 余弦阈值降为 legacy 仅审计。
+- **`llm_client.py`**：加 `create_eval_llm_client()`（不同家族评判端）+ `MockEvaluationJudge`（子串匹配冒烟）。
+- 其余（embedding / extraction / activation / memory_store / logger / promotion）沿用 v3。
+
+### 事件日志类型（v4，全 10 类）
+`memory_write` / `memory_dedup_skip` / `external_validation`(跨 session 计 EV) / `internal_activation`(frequency 改用 total_activation) / `local_reorganization`(受体语义，action=mergeable|contradict) / `working_eviction` / `working_to_consolidated` / `consolidated_to_core` / **`conflict_link`**(双向矛盾链接，漂移2) / **`core_promotion_blocked`**(被矛盾冻结，漂移1)。
+
+### 工具（tools/）
+- `dev_simulate.py`（v4 移植）：确定性 MockRelationClassifier + MockEmbedding + ScriptedExtractionLLM，全 10 类事件验证（含 conflict_link / core_promotion_blocked）；支持 `--strategy/--data/--log`。
+- `run_corpus.py`：支持**会话感知语料**（.jsonl 含 `session_id`，或 .txt `# session: N` 标记）；`--strategy persistence|frequency` 对照。守反身性红线（只喂外部语料）。
+- **新增 `evaluate.py`**（v4 §5）：独立家族 LLM 主裁判判定「记忆是否包含回答探针所需事实：包含/部分/不包含」，输出证据命中率 + `logs/eval_<tag>.json`。
+- **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。只描述、不判定理论。
+
+### 测试
+- `tests/test_scenarios.py` 重写为 v4 语义：`uv run pytest` → **20 passed**（确定性 MockRelationClassifier + MockEmbedding + FakeExtractionLLM）。覆盖：跨/同 session 重复 EV、mergeable 受体 trigger、contradict 写入+双向链接+受体 conflict、related IA、unrelated 写入、dedup 跳过、working 双策略晋升、**core 仅 merge trigger 晋升 + conflict 阻断**、session 独立性、容量淘汰。
+
+### 语料
+- 新增 `corpus_phase2.jsonl`（6 session 结构化）+ `corpus_phase2_probes.jsonl`（5 探针），供后续真实 LLM 冒烟 + 评估。
+
+### 待办（v4 冻结前）
+- 真实 LLM 冒烟：跑 LoCoMo 1–2 对话 / corpus_phase2，校准 `R_RECALL`、分类器甲/乙抉择、"部分包含"计分、锁定验证集。（注：漂移1/2 已改事件分布，须**先修后冒烟**，否则校准数据作废。）
+- `RESEARCH_CONJECTURES.md` 升格（预登记→验证集承诺）。
+- 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
+- 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）。
+
