@@ -139,6 +139,19 @@ def main() -> None:
 
     print(f"\n[done] 完成。分析: uv run python tools/analyze_trajectory.py --log {args.log} --data {args.data}")
 
+    # 中→慢闸阻断可观测性（v4 §2.5，PI 漂移B 回执）：conflict 阻断器在 v0.2 无解封路径，
+    # 自然语料上 contradict 高频可能使中层批量永久阻断 → core 晋升率趋零（v3 死结同构复现风险）。
+    # 报告阻断率/core 数供 PI 判断第二道闸是否实质瘫痪（阈值~30%→冻结前重评阻断条件）。
+    # 主测量不受影响：D 只测第一道闸，evaluate 测中层+core 两层之和，阻断只改记忆在哪层。
+    from ananke.migration import block_state_summary
+    bs = block_state_summary(pipeline.memory_store)
+    print(f"\n[block 可观测] 中层总数={bs['consolidated_total']} | "
+          f"被阻断(conflict>0)={bs['blocked_count']} | 阻断率={bs['block_rate']:.1%} | "
+          f"core 晋升数={bs['core_count']}")
+    if bs["consolidated_total"] and bs["block_rate"] >= 0.30:
+        print(f"  [!] 阻断率≥30%：第二道闸可能实质瘫痪。冻结前须重评阻断条件"
+              f"（如改 conflict_trigger>merge_trigger 相对判据）。详见协议 v4 §2.5。")
+
 
 if __name__ == "__main__":
     main()

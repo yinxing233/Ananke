@@ -88,3 +88,27 @@ def promote_consolidated_memories(memory_store, event_logger) -> List[MemoryEntr
             )
             promoted.append(memory)
     return promoted
+
+
+def block_state_summary(memory_store) -> dict:
+    """中→慢闸阻断可观测性快照（v4 §2.5，PI 漂移B 回执）。
+
+    conflict 阻断器在 v0.2 无裁决/解封机制（重组已退化为计量，登记在案的债）→
+    conflict_trigger>0 一次触发即永久阻断。结构上这是 v3 死结的同构复现风险：自然语料上
+    contradict 高频 → 中层记忆批量被永久阻断 → core 晋升率可能趋零。本函数供 run_corpus
+    在结束时报告阻断率与 core 晋升数，供 PI 判断第二道闸是否实质瘫痪：
+      · 阻断率 > 量级阈值（PI 取 ~30%）→ 冻结前须重评阻断条件（如改 conflict_trigger>
+        merge_trigger 的相对判据）。
+    好消息：主测量不受威胁——D 只测第一道闸，evaluate 测中层+core 两层之和，阻断只改变
+    记忆位于哪一层，不改变它是否被测到（见协议 v4 §2.5 文档说明）。
+    """
+    consolidated = memory_store.get_consolidated_memories()
+    blocked = [m for m in consolidated if m.conflict_trigger > 0]
+    core = memory_store.get_core_memories()
+    total_mid = len(consolidated)
+    return {
+        "consolidated_total": total_mid,
+        "blocked_count": len(blocked),
+        "block_rate": (len(blocked) / total_mid) if total_mid else 0.0,
+        "core_count": len(core),
+    }
