@@ -97,3 +97,19 @@ Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.83
 ## 开放问题
 - 语料问题待议：Phase 3 需"世界会演化"的语料；待定用改造公开基准（LoCoMo 类）还是自建。
 - v0.2 路线（未做）：分析单元从 Memory 提升到 Constraint 网络；跨 LLM 一致性（LLM Invariance）等。
+
+## 2026-07-22~24 v4 召回-分类落地 + 两级缓存（实验仪器前提）
+
+- **背景**：v4 协议草案（§2.2 召回-分类两段式 vs v3 余弦阈值判定）代码已完成、待冒烟。本轮重心从"协议设计"转向"让实验可重放、可审计"——因为主测量 D=(P\F)∪(F\P) 对提取/分类非确定性极度敏感，噪声会淹没"策略差"。
+- **Fable5 审查四项漂移修正（2026-07-22，冒烟前完成）**：
+  1. **漂移1（最重，理论倒置）**：原 `conflict_trigger≥2 → 升 CORE` 是 v3「矛盾计为验证」EV 污染在第二道闸复活。改为 `conflict_trigger>0` = **CORE 晋升阻断器**（CORE 装经受住检验者，被矛盾=检验失败）。详见协议 §2.5。
+  2. **漂移2（更新能力）**：contradict 命中时新断言**写入快层 + 与受体建双向 conflict 链接**（系统须能更新世界状态），否则验证阶段命中率在含改口事实上系统性失真。mergeable 仍不写（冗余，留债）。
+  3. **漂移3（PI 追认）**：中→慢闸对两策略走同一逻辑，对分歧集 D 零贡献；**追认 D 仅测 working→consolidated 第一道闸**，写入 §6。
+  4. **漂移4（协议化）**：跨运行同一性判据「归一化内容比对」规则（小写+去标点+折叠空白）成文入 §6，`tools/divergence_analysis._norm` 对齐。
+- **Claude 三段结构审查（B系列裁决 + 操作红线）**：对两级缓存代码做纯 review 后，Claude 裁决 B 系列**全部照修但等级重排**——B3（prompt 模板 SHA1 哈希自动失效）被低估，它是三项里**唯一能无声毁掉主实验数据**的（改 prompt 不失效缓存 → 混合版本结果污染 D）；C2（空响应缓存为 unrelated）藏规约缺陷（传输失败与语义判定被折叠）。并补**操作红线**：缓存移出 data/ 与 data/ 平级存放、`--clean` 或任何清理**不得触碰缓存目录**（缓存是已付费 LLM 调用，253 轮 Qwen 全在里面）；D 内置为脚本默认（重放默认跑满原始轮数，跑满为显式 opt-in）。
+- **执行（5 处修复 B1+B2+B3+C1/C2+D）**：B1（§6 归一化抽到 `text_norm.py` 单一来源）/ B2（model_tag 防呆）/ B3（prompt 模板哈希自动失效）/ C1+C2（只缓存合法解析标签）/ D（turn 字段内置 + 平级 `cache/` + `--clean` 红线）。全量 43 passed。
+- **排查中发现的真实 bug（原 review 摘要未覆盖，已修）**：
+  1. **迁移 key 不兼容（红线级）**：旧 253 轮缓存 key 用 prompt 版本号 `"v1"`，B3 改哈希后 key 变 `model_tag|<hash>|...`；若只搬文件不改 key，重放 1-253 全部 miss → 重烧 253 轮额度。修复：`migrate_legacy_cache` 接收当前 prompt 模板、迁移时重写 version 段为哈希段（8-hex 检测区分新旧、畸形/未知类原样保留）。验证旧 `openai-compatible|deepseek-chat|v1|extraction|user likes cats` → `...|8019d93a|...` 命中零 API；幂等。
+  2. **B2 防呆解析 bug**：`_cache_model_tag` 用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
+- **沉淀为实验仪器纪律**：两级缓存不是"省钱优化"，是测量前提——它把 D 从"策略差+LLM噪声"退化为"纯策略差"，并把"续跑"升级为"可审计重放"（缓存重放前 N 轮须与原始逐事件一致，否则暴露非确定性）。导出 50 对标注模板（方案甲 NLI cross-encoder vs 方案乙 LLM 五选一，人工标注准确率拍板）亦建于此时，待完整语料跑完后使用（`tools/export_annotation_pairs.py`）。
+- **未决（留待 v4 冻结）**：真实 LLM 冒烟（换额度续跑 254-419 + replay 等价性验证）、`RESEARCH_CONJECTURES.md` 升格、`§8` 冻结条件填写 → MVP v0.2 tag。

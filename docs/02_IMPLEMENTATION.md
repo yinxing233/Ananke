@@ -96,9 +96,25 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 ### 语料
 - 新增 `corpus_phase2.jsonl`（6 session 结构化）+ `corpus_phase2_probes.jsonl`（5 探针），供后续真实 LLM 冒烟 + 评估。
 
-### 待办（v4 冻结前）
-- 真实 LLM 冒烟：跑 LoCoMo 1–2 对话 / corpus_phase2，校准 `R_RECALL`、分类器甲/乙抉择、"部分包含"计分、锁定验证集。（注：漂移1/2 已改事件分布，须**先修后冒烟**，否则校准数据作废。）
-- `RESEARCH_CONJECTURES.md` 升格（预登记→验证集承诺）。
-- 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
+### 两级缓存 + 确定性审计（2026-07-22~24 增补，Claude 三段结构执行件①）
+
+> 为何要缓存：主测量量 D=(P\F)∪(F\P) 测"换策略后哪些记忆进巩固层"。若提取/分类非确定，噪声渗入 D，分不清"策略差"还是"LLM 抽风"。两级缓存让提取对所有运行一致、重叠句对分类一致 → D 退化为纯策略差测度。续跑=重跑：前 N 轮缓存命中零 API，第 N+1 轮起才新调用（附赠重放等价性测试）。
+
+- **新增 `cache.py`（两级缓存 extraction/pairs）**：key = `(model_tag, prompt_hash, category, normalized_input)`，落盘 `cache/{extraction,pairs}.jsonl`（**与 data/ 平级**，红线：只增不删，`.gitignore` 已忽略）。`model_tag` 含 `provider|model`，换模型自动失效；`prompt_hash` = 实际发给 LLM 的 prompt 模板 SHA1 前 8 位；`normalized_input` 提取用 §6 归一化(输入)，分类用 `归一化(new)||归一化(existing)`。
+- **新增 `text_norm.py`**：§6 归一化（小写+去标点+折叠空白）**唯一实现**；`cache.py` 与 `tools/divergence_analysis.py` 均 import 它（B1：消除 P0-A 三方矛盾病灶）。
+- **`migrate_legacy_cache`（迁移 + key 重写，红线级）**：旧位置 `data/cache` → 平级 `cache/`（保住已付费 LLM 调用，如 253 轮 Qwen）。迁移同时把旧 key 的 version 段重写为当前 prompt 哈希段——旧 v0.2-draft 缓存 key 用 `"v1"`，B3 改哈希后若不重写，重放 1-253 轮会全部 miss → 重烧额度。重写安全（prompt 模板内容本轮未变、仅编码方式变）；8-hex 检测区分新旧、畸形/未知类原样保留。幂等（目标已有缓存则跳过）。
+- **C1+C2（只缓存合法标签）**：提取/分类解析失败或空响应 = 基础设施故障（超时/429/连接断），**不落盘、重试、最终 raise**，绝不与 `"unrelated"` 折叠（unrelated 是唯一不发光信号类，每次折叠无声吞掉潜在 EV 或 contradict）。
+- **D 内置**：`EventLogger` 加 `turn` 字段；`run_corpus` 标记轮序供重放推断原始轮数；`--clean` 红线拒绝清理缓存目录（指向缓存目录即 `exit(4)`）。
+- **两个真实 bug 修复（排查中发现，非 Claude 原清单）**：
+  1. **迁移 key 不兼容（红线级）**：见上 `migrate_legacy_cache` 重写——否则 253 轮已付费成果在重放下全 miss。
+  2. **B2 防呆解析 bug**：`replay_equiv_test._cache_model_tag` 原用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改为 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
+- **新增 `tools/export_annotation_pairs.py`**：从 `cache/pairs.jsonl` 分层导出 50 对标注模板（人工标注 + 方案甲/乙准确率拍板）。`model_tag` 含 `|` 的 key 用 `rpartition("||")`+`rsplit("|",2)` 还原两段记忆，避免 `|`/`||` 冲突错位。
+
+### 待办（v4 冻结前）—— 更新
+- [x] **两级缓存 + 确定性审计已完成**（cache.py / text_norm.py / migrate / 导出工具；Claude 三段结构 B1-B3 + C1/C2 + D 全落地；两个真实 bug 已修；全量 43 passed）。
+- [ ] 真实 LLM 冒烟（**已解锁**：上述"先修"已完成，校准数据有效）：换额度续跑 254-419（253 轮已缓存、重放零 API），校准 `R_RECALL`、分类器甲/乙抉择、"部分包含"计分、锁定验证集。
+- [ ] `replay_equiv_test` 等价性验证：前 253 轮缓存命中须与原始运行逐事件一致（fingerprint 忽略 `_id`/timestamp）。
+- [ ] `RESEARCH_CONJECTURES.md` 升格（预登记→验证集承诺）。
+- [ ] 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
 - 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）。
 
