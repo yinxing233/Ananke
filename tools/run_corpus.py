@@ -95,10 +95,32 @@ def main() -> None:
         action="store_true",
         help="运行前清空 --data 目录，避免残留状态污染实验结果（GLM #7 防护）",
     )
+    ap.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="禁用两级缓存（每次都调真实 LLM）；默认开启缓存（协议 v4 §8）",
+    )
+    ap.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="运行前清空两级缓存目录（提取+分类对），强制重新调用 LLM 落盘",
+    )
     args = ap.parse_args()
 
     if args.strategy:
         Config.WORKING_PROMOTION_STRATEGY = args.strategy
+
+    # 两级缓存控制（协议 v4 §8，续跑即重跑）：
+    # --refresh-cache 清空缓存（首跑或怀疑首跑抽风被冻结时用）；
+    # --no-cache 完全禁用（每次调真实 LLM，仅诊断用）。
+    if args.refresh_cache:
+        from ananke.cache import LLMCache
+
+        n = LLMCache.refresh(Config.CACHE_DIR)
+        print(f"[refresh-cache] 已清空 {Config.CACHE_DIR}（删除 {n} 条缓存）")
+    if args.no_cache:
+        Config.CACHE_ENABLED = False
+        print("[cache] 已禁用两级缓存（--no-cache）")
 
     corpus = load_corpus(Path(args.corpus))
     if not corpus:
@@ -106,7 +128,13 @@ def main() -> None:
         return
 
     # 数据目录预清理防护（GLM #7）：避免残留状态污染实验结果。
+    # 红线：--clean 只清数据目录，**永远不得触碰缓存目录**（cache/ 是项目最贵的持久
+    # 资产，253 轮 Qwen 调用全在里面）。若 --data 误指到缓存目录，拒绝执行。
     data_path = Path(args.data)
+    if data_path.resolve() == Path(Config.CACHE_DIR).resolve():
+        print(f"[abort] --data 指向缓存目录 {Config.CACHE_DIR}，拒绝清理（红线：缓存只增不删）。"
+              f"\n  若确需重置缓存，请用显式 --refresh-cache，而非 --clean。")
+        sys.exit(4)
     if args.clean:
         if data_path.exists():
             shutil.rmtree(data_path)
@@ -116,7 +144,7 @@ def main() -> None:
 
     # 真实组件
     embedding = EmbeddingEngine(Config.EMBEDDING_MODEL)
-    llm = create_llm_client()
+    llm = create_llm_client()  # 内部自动迁移旧 data/cache → cache/（红线：保住已付费调用）
     pipeline = MemoryPipeline(
         MemoryStore(args.data),
         embedding,
@@ -130,6 +158,7 @@ def main() -> None:
     print(f"[info] 日志 → {args.log}\n")
 
     for i, (line, session_id) in enumerate(corpus, 1):
+        pipeline.event_logger.turn = i  # 标记轮序号，供重放等价性推断原始轮数（D 内置）
         result = pipeline.process(line, session_id=session_id)
         n_write = len(result["written"])
         n_consol = len(result["consolidated"])
@@ -151,6 +180,15 @@ def main() -> None:
     if bs["consolidated_total"] and bs["block_rate"] >= 0.30:
         print(f"  [!] 阻断率≥30%：第二道闸可能实质瘫痪。冻结前须重评阻断条件"
               f"（如改 conflict_trigger>merge_trigger 相对判据）。详见协议 v4 §2.5。")
+
+    # 两级缓存统计（协议 v4 §8）：命中率高=续跑近乎零 API；miss=首跑新调用。
+    cache = getattr(llm, "cache", None)
+    if cache is not None:
+        st = cache.stats()
+        print(f"\n[cache] 提取 hits={st['extraction']['hits']}/{st['extraction']['hits']+st['extraction']['misses']} "
+              f"(池 {st['extraction']['size']}) | "
+              f"分类对 hits={st['pairs']['hits']}/{st['pairs']['hits']+st['pairs']['misses']} "
+              f"(池 {st['pairs']['size']})")
 
 
 if __name__ == "__main__":

@@ -534,13 +534,18 @@ def test_ratelimiter_zero_rpm_nonblocking():
 
 
 def test_ratelimiter_positive_rpm_burst_capacity():
-    """rpm>0：capacity=rpm，前 rpm 次 acquire 立即可用（突发额度），rate 属性正确。"""
+    """rpm>0：突发容量钉死 BURST_MAX(2)，与 rpm 解耦；仅前 2 次立即可用。"""
     from ananke.llm_client import _RateLimiter
     import time
     rl = _RateLimiter(30)
     assert rl.rate == 0.5          # 30/60
-    assert rl.capacity == 30
+    assert rl.capacity == 2.0      # 突发上限，不与 rpm 同放大
+    # 前 BURST_MAX 次瞬间可用，其余开始节流
     t0 = time.time()
-    for _ in range(30):            # 恰好 capacity，全应立即可用
+    for _ in range(2):
         rl.acquire()
-    assert time.time() - t0 < 0.5
+    assert time.time() - t0 < 0.2
+    # 第 3 次应被节流（等待 refill ~2s）
+    t1 = time.time()
+    rl.acquire()
+    assert time.time() - t1 >= 1.5

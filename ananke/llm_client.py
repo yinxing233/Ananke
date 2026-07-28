@@ -31,10 +31,17 @@ class _RateLimiter:
     rpm<=0 表示不节流（如 deepseek 评判端限额高）。
     """
 
+    # 突发容量上限：Gemini/DeepSeek 等滑动窗口限流禁止瞬时大爆发。
+    # 即便平均 rpm 合规，启动或静默后瞬间齐发仍会触发 429。故把突发钉死为小常数，
+    # 仅允许同一逻辑单元(如 提取+分类 一回合)瞬间发出，之后按 rpm 匀速。
+    BURST_MAX = 2.0
+
     def __init__(self, rpm: int) -> None:
         self.rpm = float(rpm)
         self.rate = self.rpm / 60.0 if self.rpm > 0 else 0.0
-        self.capacity = max(int(self.rpm), 1)
+        # rpm>0 时突发容量=BURST_MAX（与 rpm 解耦，避免 rpm 越大突发越狂）；
+        # rpm<=0(不限)时退化为 1 且 acquire 直接放行（见 acquire 首行）。
+        self.capacity = self.BURST_MAX if self.rpm > 0 else 1.0
         self.tokens = float(self.capacity)
         self.last = time.time()
         self._lock = threading.Lock()
@@ -105,6 +112,7 @@ class OpenAICompatibleClient(BaseLLMClient):
         model: Optional[str] = None,
         temperature: Optional[float] = None,
         rpm: Optional[int] = None,
+        cache=None,
     ) -> None:
         self.api_key = api_key if api_key is not None else Config.LLM_API_KEY
         self.base_url = base_url if base_url is not None else Config.LLM_BASE_URL
@@ -113,6 +121,8 @@ class OpenAICompatibleClient(BaseLLMClient):
         # RPM 节流（I/O 韧性）：未显式传 rpm 时用 Config.LLM_RPM（驱动端默认 30）。
         # 评判端传 rpm=Config.EVAL_LLM_RPM（默认 0=不限，因默认 deepseek）。
         self._limiter = _RateLimiter(rpm if rpm is not None else Config.LLM_RPM)
+        # 两级缓存（提取/分类对，协议 v4 §8）：None=不缓存（评判端/测试）。
+        self.cache = cache
         # 延迟导入，避免未安装 openai 时影响 mock 模式 / 测试。
         from openai import OpenAI
 
@@ -161,7 +171,34 @@ def create_llm_client() -> BaseLLMClient:
         base_url = Config.LLM_BASE_URL
         if Config.LLM_PROVIDER == "gemini" and not base_url:
             base_url = _GEMINI_OPENAI_BASE_URL
-        return OpenAICompatibleClient(base_url=base_url)
+        # 两级缓存：key 含 model_tag（provider|model）+ prompt 模板哈希，换模型/改 prompt
+        # 自动失效（B3：改 prompt 模板即全量失效，不依赖手动 bump 版本号）。
+        cache = None
+        if Config.CACHE_ENABLED:
+            from ananke.cache import LLMCache, migrate_legacy_cache
+            from ananke.extraction import EXTRACTION_PROMPT_TEMPLATE
+            from ananke.relation import RELATION_PROMPT_TEMPLATE
+
+            # 红线：保住已付费的 LLM 调用成果——旧位置 data/cache 迁移到平级 cache/，
+            # 并把旧 key 的 version 段重写为当前 prompt 哈希段（否则旧缓存无法在新 key
+            # 下命中，等于白迁移）。传入当前 prompt 模板以算出哈希。
+            migrate_legacy_cache(
+                Config.CACHE_DIR,
+                prompt_templates={
+                    "extraction": EXTRACTION_PROMPT_TEMPLATE,
+                    "pairs": RELATION_PROMPT_TEMPLATE,
+                },
+            )
+            cache = LLMCache(
+                cache_dir=Config.CACHE_DIR,
+                model_tag=f"{Config.LLM_PROVIDER}|{Config.LLM_MODEL}",
+                prompt_templates={
+                    "extraction": EXTRACTION_PROMPT_TEMPLATE,
+                    "pairs": RELATION_PROMPT_TEMPLATE,
+                },
+                enabled=True,
+            )
+        return OpenAICompatibleClient(base_url=base_url, cache=cache)
     raise ValueError(
         f"不支持的 LLM_PROVIDER={Config.LLM_PROVIDER!r}。"
         f"可选：{', '.join(sorted(_OPENAI_COMPATIBLE))}；"

@@ -93,8 +93,12 @@ class MemoryPipeline:
         best, best_sim = None, -1.0
         for memory, vec in zip(existing_cache, existing_vecs):
             sim = self.embedding_engine.cosine_similarity(cand_vec, vec)
-            if sim >= Config.R_RECALL and sim > best_sim:
-                best, best_sim = memory, sim
+            if sim >= Config.R_RECALL:
+                # 确定性 tie-break（协议 v4 §8 确定性审计）：余弦平票时按 (content, id) 字典序
+                # 取较小者。content 跨运行一致（提取缓存命中）→ 重放等价；id(uuid) 仅作同 content
+                # 兜底（业务无差别）。避免列表顺序依赖导致的非确定性渗入 D。
+                if sim > best_sim or (sim == best_sim and (best is None or (memory.content, memory.id) < (best.content, best.id))):
+                    best, best_sim = memory, sim
         return best, best_sim
 
     def _handle_relation(

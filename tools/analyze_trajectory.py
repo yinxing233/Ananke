@@ -183,8 +183,9 @@ def failure_samples(grouped: dict[str, list[dict]], content_map: dict[str, str],
         elif fl == "CONSOLIDATED":
             out.append(
                 f"  · 停留巩固层: 「{content}」 — local_reorganization_trigger={lrt} "
-                f"(mergeable), conflict_trigger={ct} (contradict)；"
-                f"任一项 ≥ {Config.LOCAL_REORG_THRESHOLD}/{Config.CONFLICT_TRIGGER_THRESHOLD} 才进慢层"
+            f"(mergeable), conflict_trigger={ct} (contradict)；"
+            f"进慢层需 local_reorg_trigger≥{Config.LOCAL_REORG_THRESHOLD} 且 conflict_trigger=0"
+            f"（conflict>0 视为检验失败，阻断 CORE 晋升，见 v4 §2.5）"
             )
     return out
 

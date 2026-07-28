@@ -21,7 +21,9 @@ def enforce_working_capacity(memory_store, event_logger, strategy=None) -> None:
         strategy = promotion_strategy_from_config()
     working = memory_store.get_working_memories()
     while len(working) > Config.WORKING_CAPACITY:
-        evicted = min(working, key=lambda memory: strategy.score(memory))
+        # 确定性 tie-break（协议 v4 §8 确定性审计）：分数平票时按 (content, id) 字典序淘汰
+        # 较小者。content 跨运行一致（提取缓存）→ 重放等价；id(uuid) 仅同 content 兜底。
+        evicted = min(working, key=lambda memory: (strategy.score(memory), memory.content, memory.id))
         memory_store.remove(evicted)
         event_logger.log(
             "working_eviction",

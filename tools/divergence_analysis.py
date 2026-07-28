@@ -47,21 +47,11 @@ if str(ROOT) not in sys.path:
 POWER_FLOOR = 20
 
 
-def _norm(content: str) -> str:
-    """内容归一化键（跨运行同一性判据，协议 v4 §6 成文）。
-
-    规则：小写化 → 去除所有非字母数字/非空白字符（去标点；unicode 下的单词字符类覆盖中文）
-    → 折叠连续空白并去首尾空白。
-
-    用途：两次独立运行里同一条事实会生成不同 UUID，D 比对必须按内容对齐，
-    否则会把同一事实误报为两条分歧。改写容忍度不在 v0.2 范围（措辞不同的同事实
-    仍判为两条分歧，已知限制）。
-    """
-    import re
-    s = content.lower()
-    s = re.sub(r"\s+", " ", s).strip()
-    s = re.sub(r"[^\w\s]", "", s)
-    return s
+# §6 记忆同一性判据的**唯一**实现来源：ananke/text_norm.normalize。
+# 此处仅做别名以保持既有内部引用（_norm）不变，绝不再复制一份（B1：双拷贝=协议
+# 条款出现两个可独立漂移的实现，同 P0-A 三方矛盾病灶）。守护测试
+# test_protocol_2_6_single_norm_source 钉死 cache.normalize is divergence_analysis._norm。
+from ananke.text_norm import normalize as _norm
 
 
 def load_eval(path: str) -> dict[str, dict]:

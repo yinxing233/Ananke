@@ -21,6 +21,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from ananke.cache import normalize
+
 # Canonical relation labels.
 REL_DUPLICATE: str = "duplicate"
 REL_CONTRADICT: str = "contradict"
@@ -62,6 +64,17 @@ _LABEL_NORMALIZE = {
     "irrelevant": REL_UNRELATED,
 }
 
+# 用户 prompt 的**固定结构**（{existing}/{new} 为输入变量占位）。关系分类 prompt 模板 =
+# _LLM_SYSTEM_PROMPT + RELATION_USER_PREFIX，作为缓存 key 的 prompt_hash 来源（B3）。
+# 改此结构即全量失效。
+RELATION_USER_PREFIX = (
+    "Existing memory: {existing}\n"
+    "New memory: {new}\n\n"
+    "What is the relation of the new memory to the existing memory?"
+)
+# 完整模板（system + 用户结构），供 llm_client 构造缓存时算 SHA1。
+RELATION_PROMPT_TEMPLATE = _LLM_SYSTEM_PROMPT + RELATION_USER_PREFIX
+
 
 class RelationClassifier(ABC):
     """Decides the relation label for a (new, existing) memory pair."""
@@ -90,12 +103,36 @@ class LLMRelationClassifier(RelationClassifier):
             f"New memory: {new_content}\n\n"
             "What is the relation of the new memory to the existing memory?"
         )
-        response = self.llm_client.call_llm(
-            prompt, system_prompt=_LLM_SYSTEM_PROMPT, temperature=self.temperature
-        ).strip().lower()
-        token = response.split()[0] if response.split() else response
-        token = token.strip(".,:;\"'")
-        return _LABEL_NORMALIZE.get(token, REL_UNRELATED)
+        # 两级缓存（分类对层）：同 (new, existing) 句对永远返回首次判定 → P/F 重跑与 sweep
+        # 中重现的句对全部免费命中，且消除分类非确定性对 D 的污染。
+        cache = getattr(self.llm_client, "cache", None)
+        norm = normalize(new_content) + "||" + normalize(existing_content)
+        cached = cache.get("pairs", norm) if cache else None
+        if cached is not None:
+            return cached  # 命中：已是归一化标签（C1），直接返回
+        last_err: Optional[Exception] = None
+        # 解析失败 / 空响应 = 基础设施故障（超时/429/连接断），不等于 unrelated，
+        # 不落盘、重试、最终 raise（C2：unrelated 是唯一不发光信号的类，每次故障折叠
+        # 都无声吞掉一个潜在 EV 或 contradict）。
+        for _ in range(3):
+            try:
+                response = self.llm_client.call_llm(
+                    prompt, system_prompt=_LLM_SYSTEM_PROMPT, temperature=self.temperature
+                ).strip()
+                if not response:
+                    raise ValueError("关系分类收到空响应（基础设施故障，非语义判定）")
+                token = response.lower().split()[0].strip(".,:;\"'")
+                if not token:
+                    raise ValueError("关系分类响应无可解析 token（基础设施故障）")
+                label = _LABEL_NORMALIZE.get(token, REL_UNRELATED)
+                # C1：只缓存合法归一化标签。
+                if cache:
+                    cache.put("pairs", norm, label)
+                return label
+            except ValueError as e:
+                last_err = e
+                continue
+        raise last_err or RuntimeError("关系分类失败（基础设施故障且重试未恢复）")
 
 
 class MockRelationClassifier(RelationClassifier):

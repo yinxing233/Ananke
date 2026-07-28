@@ -81,3 +81,17 @@ class Config:
     EVAL_LLM_MODEL = os.getenv("EVAL_LLM_MODEL", "deepseek-chat")
     # "部分包含"计分：命中=1.0（包含），partial=该系数（待冒烟校准），不含=0.0
     EVAL_PARTIAL_CREDIT = float(os.getenv("EVAL_PARTIAL_CREDIT", "0.5"))
+
+    # ---- 两级缓存（协议 v4 §8，续跑即重跑）----
+    # 提取结果 + 分类对结果落盘，让换模型/换策略的重跑近乎零 API 成本，并给主测量量 D 去噪
+    # （提取对所有运行一致、重叠句对分类一致 → D 退化为纯策略差测度）。
+    # key = (model_tag, prompt_hash, category, normalized_input)：
+    #   - model_tag / prompt_hash 任一变化自动失效；prompt_hash 由实际 prompt 模板 SHA1 算出
+    #     （B3：改 prompt 模板即全量失效，不依赖手动 bump）。
+    # 红线：缓存目录与 data/ 平级（cache/），任何数据清理（--clean / rm -rf data）都不得触碰。
+    CACHE_ENABLED = _as_bool(os.getenv("CACHE_ENABLED"), default=True)
+    CACHE_DIR = os.getenv("CACHE_DIR", "cache")
+    # 以下的版本号已**不参与失效**（失效由 prompt 模板哈希自动完成，B3）。保留仅作语义标注，
+    # 方便人读"这批缓存对应哪版指令"；改了 prompt 模板无需记得 bump 它们。
+    CACHE_PROMPT_VERSION_EXTRACTION = os.getenv("CACHE_PROMPT_VERSION_EXTRACTION", "v1")
+    CACHE_PROMPT_VERSION_PAIRS = os.getenv("CACHE_PROMPT_VERSION_PAIRS", "v1")
