@@ -113,3 +113,34 @@ Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.83
   2. **B2 防呆解析 bug**：`_cache_model_tag` 用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
 - **沉淀为实验仪器纪律**：两级缓存不是"省钱优化"，是测量前提——它把 D 从"策略差+LLM噪声"退化为"纯策略差"，并把"续跑"升级为"可审计重放"（缓存重放前 N 轮须与原始逐事件一致，否则暴露非确定性）。导出 50 对标注模板（方案甲 NLI cross-encoder vs 方案乙 LLM 五选一，人工标注准确率拍板）亦建于此时，待完整语料跑完后使用（`tools/export_annotation_pairs.py`）。
 - **未决（留待 v4 冻结）**：真实 LLM 冒烟（换额度续跑 254-419 + replay 等价性验证）、`RESEARCH_CONJECTURES.md` 升格、`§8` 冻结条件填写 → MVP v0.2 tag。
+
+## 2026-07-28 · 代码漂移审计后：B1–B7 裁决冻结候选
+
+- **主张层级重新锁定**：v0.2 的直接观测对象是 C2 的 v4 操作化——第一道闸分歧集 D 上，
+  persistence / frequency 两套完整选择制度的 reference-grounded evidence 命中率。原则 B、
+  约束场理论整体与闭环慢→快塑形不直接检验。
+- **pre-audit 基线保全**：把审计前已有代码/工具、文档归档和已跟踪轨迹报告分别提交为
+  `05205a9` / `29e22b6` / `2c780f8`，避免后续裁决 commit 夹带无来源改动。
+  2026-07-28 实际重跑测试为 `43 passed`。
+- **旧 253 轮降级**：当前 `cache/` 与 `data/cache/` 均不存在；conv-26 工作层 52>容量 50，
+  与非原子部分轮一致。故“续跑 254–419”方案作废，旧状态/日志只作探索碎片；修复后从第 1
+  轮重跑。
+- **替代此前未决方案**：上一节历史记录中的“续跑 254–419”与
+  “直接把 RESEARCH_CONJECTURES.md 升格”均被本轮事实和裁决取代。正式承诺将由新建的
+  `PREREGISTRATION.md` 承担，历史文字保留只为呈现决策演进。
+- **探索日志指纹**：`logs/conv26_events.jsonl` 共 949 条，SHA256 =
+  `040E4AC4DE0DE3674DD9CE0B04B635D1CEA3BB18C910EB76779C76CBF6E337F7`。
+  事件不含 session_id，不能据此机械证明探索数据隔离。
+- **LoCoMo 库存闭合**：源文件含 10 条对话、272 sessions、5,882 个双-speaker 轮次、1,986 QA。
+  conv-26 已用于探索；其余 9 条为验证候选，但本轮不替 PI 选择保留集。
+- **B1–B7 裁决**：
+  1. B1：每个 distinct session 对同一记忆至多贡献 1 次 EV；guided 输入不占资格；
+  2. B2：`system_guided` 保留为 v0.2 恒 False 的未启用接口；
+  3. B3：CORE 进入 top-1 召回；同分 `CORE>CONSOLIDATED>WORKING`；四关系只计数/留痕，
+     不让 CORE 进入晋升、淘汰、降级或裁决；
+  4. B4：P/F 是完整选择制度比较，不声称 score 单因子效应；实验比较器移出 Theory；
+  5. B5：不设 EV=0 硬禁令，保留推测 2 的非平凡机制对照；
+  6. B6：judge 必须拿 question + reference_fact；部分=0.5；失败剔除计数，>5% 整体无效；
+  7. B7：未知分类响应重试后硬失败，依赖轮级原子性，不再降级 unrelated。
+- **本轮边界**：只形成文档冻结候选，不修改 Python，不运行正式语料，不锁定验证 ID，不创建
+  正式 `PREREGISTRATION.md`，协议 v4 仍为草案。PI 验收后再进入 Red → Green 实现阶段。

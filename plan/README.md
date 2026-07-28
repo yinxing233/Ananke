@@ -1,7 +1,10 @@
 # Ananke 版本计划（plan/）
 
 > 本目录是 v0.1 冻结（git tag `v0.1`）之后的**后续版本路线**，不是权威规范。
-> 权威层：理论 [`../docs/00_THEORY.md`](../docs/00_THEORY.md) → 协议 [`../docs/01_PROTOCOL_v4.md`](../docs/01_PROTOCOL_v4.md)（**草案，未冻结**）→ 实现 [`../docs/02_IMPLEMENTATION.md`](../docs/02_IMPLEMENTATION.md)。
+> 权威层：理论 [`../docs/00_THEORY.md`](../docs/00_THEORY.md) →
+> 协议 [`../docs/01_PROTOCOL_v4.md`](../docs/01_PROTOCOL_v4.md)（**草案，未冻结**）+
+> [`../docs/DECISIONS_v0.2_freeze.md`](../docs/DECISIONS_v0.2_freeze.md)（裁决冻结候选）→
+> 实现 [`../docs/02_IMPLEMENTATION.md`](../docs/02_IMPLEMENTATION.md)。
 > 协议 v3 已被 v4 取代但保留供审计（[`../docs/01_PROTOCOL_v3.md`](../docs/01_PROTOCOL_v3.md)）。
 > 凡涉及"操作定义/判定函数/证据来源"变更的，按原则 C 必须升协议版本，不得静默改冻结文件。
 
@@ -54,5 +57,7 @@
 3. **反身性红线不动**：EV 永不接纳系统自生成/诱导内容。
 4. **诚实边界先行**：每版结论先写"证明了什么 / 没证明什么"，再写数字。
 5. **探索/验证两阶段分离（v4 §7）**：探索阶段（冒烟、调参）的数字标注"探索性"不进结论；冻结后验证集须用冒烟未接触的对话，数据隔离为硬约束。
-6. **预登记（[`../docs/RESEARCH_CONJECTURES.md`](../docs/RESEARCH_CONJECTURES.md)）**：协议冻结时推测升格为预测承诺，此后不得修改，只可追加验证结果；反驳时如实报告、不回改管线。
+6. **预登记**：[`../docs/RESEARCH_CONJECTURES.md`](../docs/RESEARCH_CONJECTURES.md) 保留为探索期
+   来源记录；协议正式冻结时新建一次性 `PREREGISTRATION.md`，锁定预测原文、验证集 ID、
+   代码/语料指纹与不可变性声明。反驳时如实报告、不回改管线。
 7. **主张层级不越级（v4 §1）**：预测成立 → C2 获支持 → "与原则B一致"（非验证）→ 对理论本身无断言。任何文档/叙事不得越级。

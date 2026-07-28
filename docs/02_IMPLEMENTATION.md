@@ -1,7 +1,8 @@
 # 02 · IMPLEMENTATION（当前实现 / 可频繁变更）
 
 > 本文件记录**当前**实现状态，可能数天到数月全部更换，理论不受影响。
-> 冻结的协议见 `01_PROTOCOL_v3.md`；理论见 `00_THEORY.md`；研究过程见 `03_RESEARCH_LOG.md`。
+> 当前冻结历史协议见 `01_PROTOCOL_v3.md`；待验收的当前操作化见 `01_PROTOCOL_v4.md` 与
+> `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；研究过程见 `03_RESEARCH_LOG.md`。
 
 ## 当前状态（2026-07-14，已升级协议 v3）
 - **协议已升 v3**（2026-07-14，PI 决策）：EV 阈值 0.85→0.80；新增「写入前去重」控制变量 `DEDUP_SIMILARITY_THRESHOLD=0.80`（pipeline 在提取后、写入前比对既有 working+consolidated 记忆，≥0.80 跳过写入并记 `memory_dedup_skip`，消除真实 LLM 提取碎片化混杂）；提取 Prompt 改「输出与输入同语言」。详见 `01_PROTOCOL_v3.md`。
@@ -34,7 +35,9 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 - **Phase 3 对照实验（Route 1）已跑通**（2026-07-14，同语料 `corpus_phase1.txt` 仅切 `--strategy`）：
   - persistence（External Selection）→ 升巩固层 **1 次**（badminton，EV=2，persist=3.10）。
   - frequency（Internal Selection）→ 升巩固层 **4 次**（badminton + 3 条 **EV 全为 0** 的记忆："User loves badminton" / "The user adopted a cat named Mochi" / "Mochi the cat is playful and energetic"）。这 3 条正是 persistence 跑里**同一记忆对象**停留快层者（persist 1.10/1.84/1.47）。
-  - 两遍提取记忆集完全一致（各 21 条，交集 21）→ 唯一变量 = Migration Rule，比较器有效。
+  - 两遍提取记忆集完全一致（各 21 条，交集 21），且 21<50 未触发淘汰；因此在该 v0.1
+    小语料 pilot 中，观测分歧可归于当时的快→中策略切换。此历史条件不外推到 v4；
+    v4 按 B4 明确比较完整选择制度。
   - 解读：External Selection 升层记忆全部 EV>0（受环境约束、稳定）；Internal Selection 把零外部验证、选择压力纯自循环的记忆也推上巩固层——协议 §5 预测的"退化为内部自循环、易被破坏的不稳定结构"。这是约束场理论在真实语义环境的 **Phase 3 先导实验（pilot）**——稳定性尚未测量（协议 §5 真比较器未执行，见 RELEASE 诚实边界）。日志 `logs/phase3_persist.jsonl`+`data/phase3_persist` / `logs/phase3_freq.jsonl`+`data/phase3_freq`；报告 `logs/phase3_persist_report.html` / `logs/phase3_freq_report.html`；对比脚本 `logs/_phase3_compare.py`。
   - 边界：本实验是 Phase 3 第一片（策略切换的动力学差异）。协议 §5 完整 Phase 3 还需"世界演化"语料比较存活记忆 vs 后期外部发展一致性——未做，列入待议。
 - Phase 2 闭环（Reply）未接。
@@ -46,9 +49,20 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ---
 
-## v0.2 实现状态（2026-07-22，协议 v4 草案 = MVP v0.2，**代码已完成、待冒烟校准**）
+## v0.2 实现状态（2026-07-28 审计后：**pre-audit 基线已保全，B1–B7 尚未实现**）
 
-> 协议 v4 是**草案、未冻结**。本段记录代码已落地的事实；协议多处 `[待冒烟校准]`（R_RECALL、分类器甲/乙、"部分包含"计分、验证集锁定）仍待真实语料冒烟后填 §8 冻结条件。代码按"探索阶段允许校准"的纪律实现，开放参数给了合理初值。
+> 协议 v4 是**草案、未冻结**。2026-07-28 的
+> [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 是待 PI 验收的裁决冻结候选，
+> 不是实现完成声明。当前 Python 保存在 pre-audit commit `05205a9`，基线测试实际重跑为
+> **43 passed**；下列审计差异在修复前阻断正式冒烟与验证：
+>
+> 1. 每轮非原子，当前 conv-26 状态已违反 WORKING 容量不变量；
+> 2. `evaluate.py` 会把“不包含”命中“包含”，且 judge 未收到 reference fact；
+> 3. 未知分类 token 仍可静默降级为 unrelated；
+> 4. run_corpus 丢弃 dia_id/speaker，事件缺少完整输入来源；
+> 5. EV 未按 distinct session 去重；
+> 6. CORE 尚未进入召回候选集；
+> 7. `system_guided` 只有接口和测试，正式 runner 中恒为 False。
 >
 > **2026-07-22 Fable5 审查后修正（四项漂移，均已在冒烟前完成）**：详见 `docs/03_RESEARCH_LOG.md`。简述：
 > - **漂移1（最重，理论倒置）**：原 `conflict_trigger≥2 → 升 CORE` 是 v3「矛盾计为验证」EV 污染在第二道闸复活。改为 `conflict_trigger>0` = **CORE 晋升阻断器**（原则B：CORE 装经受住检验者，被矛盾=检验失败）。详见协议 §2.5。
@@ -58,7 +72,8 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ### 架构变更（v3→v4）：余弦判定 → 召回-分类两段式
 v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构升级**自然解除**，方向三作废：
-1. **召回（recall）**：新记忆 m 与既有 working+consolidated 记忆 e 余弦 ≥ `R_RECALL`(=0.65) 才进入下一步。
+1. **当前召回（recall）**：新记忆 m 与既有 working+consolidated 记忆 e 余弦 ≥
+   `R_RECALL`(=0.65) 才进入下一步；B3 已裁决未来加入 CORE，但尚未实现。
 2. **分类（classification）**：关系分类器对 (m, e) 判 5 类：`duplicate / contradict / mergeable / related / unrelated`（协议 v4 §2.2）。
 3. **信号映射（v4 §2.3，受体语义 recipient semantics）**：
    - duplicate → 跨 session 则 `external_validation +1`（且 `total_activation +1`）；同 session 仅去重；**不写**新记忆。
@@ -87,22 +102,30 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 ### 工具（tools/）
 - `dev_simulate.py`（v4 移植）：确定性 MockRelationClassifier + MockEmbedding + ScriptedExtractionLLM，全 10 类事件验证（含 conflict_link / core_promotion_blocked）；支持 `--strategy/--data/--log`。
 - `run_corpus.py`：支持**会话感知语料**（.jsonl 含 `session_id`，或 .txt `# session: N` 标记）；`--strategy persistence|frequency` 对照。守反身性红线（只喂外部语料）。
-- **新增 `evaluate.py`**（v4 §5）：独立家族 LLM 主裁判判定「记忆是否包含回答探针所需事实：包含/部分/不包含」，输出证据命中率 + `logs/eval_<tag>.json`。
+- **新增 `evaluate.py`**（v4 §5）：目标是独立家族 LLM 对 question + reference_fact 做
+  reference-grounded 判定；当前 pre-audit 版本存在标签子串 bug、缺 reference fact 与失败折算
+  混杂，输出不得用于正式结论。
 - **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。只描述、不判定理论。
 
 ### 测试
-- `tests/test_scenarios.py` 重写为 v4 语义：`uv run pytest` → **20 passed**（确定性 MockRelationClassifier + MockEmbedding + FakeExtractionLLM）。覆盖：跨/同 session 重复 EV、mergeable 受体 trigger、contradict 写入+双向链接+受体 conflict、related IA、unrelated 写入、dedup 跳过、working 双策略晋升、**core 仅 merge trigger 晋升 + conflict 阻断**、session 独立性、容量淘汰。
+- 2026-07-28 基线实跑：`uv run pytest` → **43 passed**。现有测试覆盖缓存与主要 v4 信号映射，
+  但尚未覆盖评估契约、轮级原子性、distinct-session EV、来源元数据惰性及 CORE 进入召回后的
+  四关系处置；43/43 只证明 pre-audit 基线自洽，不证明 B1–B7 已实现。
 
 ### 语料
 - 新增 `corpus_phase2.jsonl`（6 session 结构化）+ `corpus_phase2_probes.jsonl`（5 探针），供后续真实 LLM 冒烟 + 评估。
 
 ### 两级缓存 + 确定性审计（2026-07-22~24 增补，Claude 三段结构执行件①）
 
-> 为何要缓存：主测量量 D=(P\F)∪(F\P) 测"换策略后哪些记忆进巩固层"。若提取/分类非确定，噪声渗入 D，分不清"策略差"还是"LLM 抽风"。两级缓存让提取对所有运行一致、重叠句对分类一致 → D 退化为纯策略差测度。续跑=重跑：前 N 轮缓存命中零 API，第 N+1 轮起才新调用（附赠重放等价性测试）。
+> 为何要缓存：主测量量 D=(P\F)∪(F\P) 测"换策略后哪些记忆进巩固层"。若提取/分类非确定，
+> 噪声会渗入 D。两级缓存代码的目标是让提取与重叠分类对可确定性重放。**当前运行时
+> `cache/` 与 `data/cache/` 均不存在，旧 253 轮没有可用缓存，不能免费重放。**
 
 - **新增 `cache.py`（两级缓存 extraction/pairs）**：key = `(model_tag, prompt_hash, category, normalized_input)`，落盘 `cache/{extraction,pairs}.jsonl`（**与 data/ 平级**，红线：只增不删，`.gitignore` 已忽略）。`model_tag` 含 `provider|model`，换模型自动失效；`prompt_hash` = 实际发给 LLM 的 prompt 模板 SHA1 前 8 位；`normalized_input` 提取用 §6 归一化(输入)，分类用 `归一化(new)||归一化(existing)`。
 - **新增 `text_norm.py`**：§6 归一化（小写+去标点+折叠空白）**唯一实现**；`cache.py` 与 `tools/divergence_analysis.py` 均 import 它（B1：消除 P0-A 三方矛盾病灶）。
-- **`migrate_legacy_cache`（迁移 + key 重写，红线级）**：旧位置 `data/cache` → 平级 `cache/`（保住已付费 LLM 调用，如 253 轮 Qwen）。迁移同时把旧 key 的 version 段重写为当前 prompt 哈希段——旧 v0.2-draft 缓存 key 用 `"v1"`，B3 改哈希后若不重写，重放 1-253 轮会全部 miss → 重烧额度。重写安全（prompt 模板内容本轮未变、仅编码方式变）；8-hex 检测区分新旧、畸形/未知类原样保留。幂等（目标已有缓存则跳过）。
+- **`migrate_legacy_cache`（迁移 + key 重写，红线级）**：若旧位置 `data/cache` 存在，则迁移到
+  平级 `cache/` 并重写旧 version 段。此能力用于保护未来/外部留存的已付费调用；当前工作区没有
+  可迁移的旧缓存，不能据此声称 253 轮可重放。
 - **C1+C2（只缓存合法标签）**：提取/分类解析失败或空响应 = 基础设施故障（超时/429/连接断），**不落盘、重试、最终 raise**，绝不与 `"unrelated"` 折叠（unrelated 是唯一不发光信号类，每次折叠无声吞掉潜在 EV 或 contradict）。
 - **D 内置**：`EventLogger` 加 `turn` 字段；`run_corpus` 标记轮序供重放推断原始轮数；`--clean` 红线拒绝清理缓存目录（指向缓存目录即 `exit(4)`）。
 - **两个真实 bug 修复（排查中发现，非 Claude 原清单）**：
@@ -110,11 +133,13 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
   2. **B2 防呆解析 bug**：`replay_equiv_test._cache_model_tag` 原用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改为 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
 - **新增 `tools/export_annotation_pairs.py`**：从 `cache/pairs.jsonl` 分层导出 50 对标注模板（人工标注 + 方案甲/乙准确率拍板）。`model_tag` 含 `|` 的 key 用 `rpartition("||")`+`rsplit("|",2)` 还原两段记忆，避免 `|`/`||` 冲突错位。
 
-### 待办（v4 冻结前）—— 更新
-- [x] **两级缓存 + 确定性审计已完成**（cache.py / text_norm.py / migrate / 导出工具；Claude 三段结构 B1-B3 + C1/C2 + D 全落地；两个真实 bug 已修；全量 43 passed）。
-- [ ] 真实 LLM 冒烟（**已解锁**：上述"先修"已完成，校准数据有效）：换额度续跑 254-419（253 轮已缓存、重放零 API），校准 `R_RECALL`、分类器甲/乙抉择、"部分包含"计分、锁定验证集。
-- [ ] `replay_equiv_test` 等价性验证：前 253 轮缓存命中须与原始运行逐事件一致（fingerprint 忽略 `_id`/timestamp）。
-- [ ] `RESEARCH_CONJECTURES.md` 升格（预登记→验证集承诺）。
+### 待办（v4 冻结前）—— 2026-07-28 审计更新
+- [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
+- [ ] PI 验收 `DECISIONS_v0.2_freeze.md`。
+- [ ] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现。
+- [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
+- [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。
+- [ ] 校准 `R_RECALL`、分类器甲/乙并完成 50 对人工锚点；部分计分已由 B6 定为 0.5。
+- [ ] 锁定验证集，并新建一次性 `PREREGISTRATION.md`。
 - [ ] 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
 - 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）。
-

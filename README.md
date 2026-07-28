@@ -1,7 +1,16 @@
 # Ananke
 
-基于存续检验（persistence-based）的三层记忆 MVP。实现的权威定义来自
-[`00_THEORY.md`](docs/00_THEORY.md)（理论层）与 [`01_PROTOCOL_v3.md`](docs/01_PROTOCOL_v3.md)（实验协议，唯一合法映射层）：工作记忆只能经由存续得分迁入巩固层，巩固层只能经由局部重组迁入核心层。初版设计稿 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 已标记为历史文档（部分参数与现行实现相反，见其头部声明）。
+基于存续检验（persistence-based）的三层记忆实验仪器。当前权威层级为：
+
+1. [`00_THEORY.md`](docs/00_THEORY.md)：稳定理论约束；
+2. [`01_PROTOCOL_v4.md`](docs/01_PROTOCOL_v4.md)：当前协议草案；
+3. [`DECISIONS_v0.2_freeze.md`](docs/DECISIONS_v0.2_freeze.md)：2026-07-28 的 B1–B7
+   裁决冻结候选；
+4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
+
+协议 v4 **尚未正式冻结**，B1–B7 尚未实现，当前数据只属探索阶段。冻结历史协议 v3 与初版
+[`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
+不作为本轮代码修改依据。
 
 ## 运行
 
@@ -36,13 +45,14 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 
 内置 `OpenAICompatibleClient`，覆盖 OpenAI / DeepSeek / OpenRouter / Groq / Ollama / **Gemini** 等——它们都走 OpenAI 兼容接口，仅靠 `.env` 里的 `LLM_BASE_URL` + `LLM_API_KEY` + `LLM_MODEL` 区分，**切换服务商无需改代码**。Gemini 使用其官方 OpenAI 兼容接口（不填 `LLM_BASE_URL` 时自动使用默认值）。需要 Anthropic 等其它后端时，在 `ananke/llm_client.py` 增加对应子类并注册到 `create_llm_client()` 工厂即可。
 
-## 当前实现
+## 当前实现边界
 
-- 三层 JSONL 存储、慢层优先检索与工作层容量淘汰
-- 内部激活、非系统引导的外部验证、persistence score 与逐级迁移
-- 仅在快→中迁移后触发的合并/矛盾局部重组检查
-- 全链路 JSONL 操作日志
-- 用 fake embedding/LLM 编写的确定性场景测试，覆盖迁移、重组、淘汰和重启恢复
+- pre-audit 代码包含三层 JSONL、召回—五分类、P/F 策略、缓存和事件日志；
+- 2026-07-28 基线测试为 43/43；
+- 已知阻断项包括评估解析、轮级原子性、distinct-session EV、来源元数据和 CORE 召回；
+- `system_guided` 是未启用接口，v0.2 runner 中恒为 False；
+- 当前旧 253 轮没有可用 LLM 缓存，不能作为续跑检查点；
+- 正式验证前必须先完成裁决实现、冒烟、验证集锁定和 `PREREGISTRATION.md`。
 
 ## 测试与实验组
 
@@ -50,4 +60,6 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 uv run pytest -q
 ```
 
-默认实验组为 `Config.WORKING_PROMOTION_STRATEGY = "persistence"`：外部验证权重高于内部激活。设置为 `"frequency"` 可运行对照组；对照组只按 `total_activation`（每次语义命中 cosine ≥ 0.60 即 +1，不区分来源，默认阈值 3 次）将工作记忆迁入巩固层，不复用 `internal_activation`。两组共用提取、检索、容量淘汰与中→慢局部重组逻辑，以隔离快→中迁移准则（选择压力来源）的影响。
+默认制度为 `persistence`，可切换为 `frequency`。协议 v4 将两者定义为**两套完整选择制度**：
+差异从计分出发，经晋升、容量淘汰与后续召回路径传播；本实验比较制度整体的沉淀质量，
+不声称隔离了计分函数的单因子效应。
