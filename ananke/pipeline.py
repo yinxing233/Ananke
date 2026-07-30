@@ -182,7 +182,23 @@ class MemoryPipeline:
         )
 
         if relation == REL_DUPLICATE:
-            # 去重：不写入 m。跨 session 再断言(且非系统引导)→ e 获 EV；同 session 仅丢弃。
+            # 去重：不写入 m。每个非 guided 的后续 distinct session 至多贡献一次 EV；
+            # Frequency 的 total_activation 仍按每次合格跨 session duplicate 累加。
+            ev_eligible = cross_session and not system_guided
+            ev_session_already_contributed = (
+                ev_eligible
+                and session_id in recipient.ev_contributing_session_ids
+            )
+            ev_contributed = ev_eligible and not ev_session_already_contributed
+
+            if ev_eligible:
+                recipient.total_activation += 1
+                if ev_contributed:
+                    recipient.external_validation += 1
+                    recipient.ev_contributing_session_ids.append(session_id)
+                recipient.last_activated_at = datetime.now()
+                self.memory_store.update(recipient)
+
             self.event_logger.log(
                 "memory_dedup_skip",
                 content_summary=content[:120],
@@ -190,12 +206,13 @@ class MemoryPipeline:
                 matched_memory_id=recipient.id,
                 relation=relation,
                 cross_session=cross_session,
+                ev_eligible=ev_eligible,
+                ev_contributed=ev_contributed,
+                ev_session_already_contributed=ev_session_already_contributed,
+                external_validation=recipient.external_validation,
+                total_activation=recipient.total_activation,
             )
-            if cross_session and not system_guided:
-                recipient.external_validation += 1
-                recipient.total_activation += 1
-                recipient.last_activated_at = datetime.now()
-                self.memory_store.update(recipient)
+            if ev_contributed:
                 self.event_logger.log(
                     "external_validation",
                     memory_id=recipient.id,
@@ -203,6 +220,9 @@ class MemoryPipeline:
                     cosine_similarity=round(similarity, 3),
                     external_validation=recipient.external_validation,
                     cross_session=cross_session,
+                    ev_contributing_session_id=session_id,
+                    ev_session_first_contribution=True,
+                    total_activation=recipient.total_activation,
                 )
             return False, None
 

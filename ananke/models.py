@@ -21,6 +21,7 @@ class MemoryEntry(BaseModel):
     last_activated_at: Optional[datetime] = None
     internal_activation: int = 0
     external_validation: int = 0
+    ev_contributing_session_ids: List[str] = Field(default_factory=list)
     total_activation: int = 0          # EV / IA / 任一重组触发时 +1；Frequency 模式（Internal Selection 对照组）使用，不区分来源
     local_reorganization_trigger: int = 0  # mergeable 累积（v4 §2.3）
     conflict_trigger: int = 0              # contradict 累积（v4 §2.3，与 mergeable 分开计）。
