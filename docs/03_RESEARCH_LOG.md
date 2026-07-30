@@ -144,3 +144,14 @@ Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.83
   7. B7：未知分类响应重试后硬失败，依赖轮级原子性，不再降级 unrelated。
 - **本轮边界**：只形成文档冻结候选，不修改 Python，不运行正式语料，不锁定验证 ID，不创建
   正式 `PREREGISTRATION.md`，协议 v4 仍为草案。PI 验收后再进入 Red → Green 实现阶段。
+
+## 2026-07-30 · PI 验收 B1–B7 裁决集
+
+- PI 验收通过 `DECISIONS_v0.2_freeze.md` 的完整裁决集，包括 B1–B7、三项补充裁决
+  （CORE 同分优先、guided 输入不占 EV 资格、来源元数据双轨）以及 B1 对
+  `total_activation` 来源语义的澄清。
+- 自记录本次验收的提交起，B1–B7 成为实现代理必须遵守的冻结裁决；后续改变任一裁决必须
+  新增带日期的修订记录，不得静默改写。
+- 本次验收只改变文档效力状态，不修改 Python，不表示 B1–B7 已实现，也不表示协议 v4
+  已正式冻结；下一阶段按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序执行
+  Red → Green 行为切片。

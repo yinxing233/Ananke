@@ -1,8 +1,9 @@
 # 02 · IMPLEMENTATION（当前实现 / 可频繁变更）
 
 > 本文件记录**当前**实现状态，可能数天到数月全部更换，理论不受影响。
-> 当前冻结历史协议见 `01_PROTOCOL_v3.md`；待验收的当前操作化见 `01_PROTOCOL_v4.md` 与
-> `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；研究过程见 `03_RESEARCH_LOG.md`。
+> 当前冻结历史协议见 `01_PROTOCOL_v3.md`；当前操作化草案见 `01_PROTOCOL_v4.md`，
+> PI 已验收但尚未实现的裁决见 `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；
+> 研究过程见 `03_RESEARCH_LOG.md`。
 
 ## 当前状态（2026-07-14，已升级协议 v3）
 - **协议已升 v3**（2026-07-14，PI 决策）：EV 阈值 0.85→0.80；新增「写入前去重」控制变量 `DEDUP_SIMILARITY_THRESHOLD=0.80`（pipeline 在提取后、写入前比对既有 working+consolidated 记忆，≥0.80 跳过写入并记 `memory_dedup_skip`，消除真实 LLM 提取碎片化混杂）；提取 Prompt 改「输出与输入同语言」。详见 `01_PROTOCOL_v3.md`。
@@ -49,11 +50,11 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ---
 
-## v0.2 实现状态（2026-07-28 审计后：**pre-audit 基线已保全，B1–B7 尚未实现**）
+## v0.2 实现状态（2026-07-30 PI 验收后：**pre-audit 基线已保全，B1–B7 尚未实现**）
 
-> 协议 v4 是**草案、未冻结**。2026-07-28 的
-> [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 是待 PI 验收的裁决冻结候选，
-> 不是实现完成声明。当前 Python 保存在 pre-audit commit `05205a9`，基线测试实际重跑为
+> 协议 v4 是**草案、未冻结**。2026-07-28 形成的
+> [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 已于 2026-07-30 获 PI 验收，
+> 但这不是实现完成声明。当前 Python 保存在 pre-audit commit `05205a9`，基线测试实际重跑为
 > **43 passed**；下列审计差异在修复前阻断正式冒烟与验证：
 >
 > 1. 每轮非原子，当前 conv-26 状态已违反 WORKING 容量不变量；
@@ -135,7 +136,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 
 ### 待办（v4 冻结前）—— 2026-07-28 审计更新
 - [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
-- [ ] PI 验收 `DECISIONS_v0.2_freeze.md`。
+- [x] PI 已于 2026-07-30 验收 `DECISIONS_v0.2_freeze.md`。
 - [ ] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现。
 - [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
 - [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。

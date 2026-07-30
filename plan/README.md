@@ -3,7 +3,7 @@
 > 本目录是 v0.1 冻结（git tag `v0.1`）之后的**后续版本路线**，不是权威规范。
 > 权威层：理论 [`../docs/00_THEORY.md`](../docs/00_THEORY.md) →
 > 协议 [`../docs/01_PROTOCOL_v4.md`](../docs/01_PROTOCOL_v4.md)（**草案，未冻结**）+
-> [`../docs/DECISIONS_v0.2_freeze.md`](../docs/DECISIONS_v0.2_freeze.md)（裁决冻结候选）→
+> [`../docs/DECISIONS_v0.2_freeze.md`](../docs/DECISIONS_v0.2_freeze.md)（PI 已验收，待实现）→
 > 实现 [`../docs/02_IMPLEMENTATION.md`](../docs/02_IMPLEMENTATION.md)。
 > 协议 v3 已被 v4 取代但保留供审计（[`../docs/01_PROTOCOL_v3.md`](../docs/01_PROTOCOL_v3.md)）。
 > 凡涉及"操作定义/判定函数/证据来源"变更的，按原则 C 必须升协议版本，不得静默改冻结文件。

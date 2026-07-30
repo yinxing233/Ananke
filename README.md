@@ -4,11 +4,11 @@
 
 1. [`00_THEORY.md`](docs/00_THEORY.md)：稳定理论约束；
 2. [`01_PROTOCOL_v4.md`](docs/01_PROTOCOL_v4.md)：当前协议草案；
-3. [`DECISIONS_v0.2_freeze.md`](docs/DECISIONS_v0.2_freeze.md)：2026-07-28 的 B1–B7
-   裁决冻结候选；
+3. [`DECISIONS_v0.2_freeze.md`](docs/DECISIONS_v0.2_freeze.md)：2026-07-30 经 PI 验收的
+   B1–B7 冻结裁决集；
 4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
 
-协议 v4 **尚未正式冻结**，B1–B7 尚未实现，当前数据只属探索阶段。冻结历史协议 v3 与初版
+裁决集已经冻结，但协议 v4 **尚未正式冻结**，B1–B7 尚未实现，当前数据只属探索阶段。冻结历史协议 v3 与初版
 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
 不作为本轮代码修改依据。
 
