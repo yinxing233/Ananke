@@ -1,7 +1,8 @@
 import json
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterator, Optional
 
 
 class EventLogger:
@@ -14,11 +15,50 @@ class EventLogger:
         # 供重放等价性测试推断原始运行实际轮数（D 内置：默认重放上限=原始轮数，跑满是
         # 显式 opt-in）。不参与业务语义，重放指纹比对时忽略。
         self.turn: Optional[int] = None
+        self._transaction_records: Optional[list[Dict[str, Any]]] = None
 
-    def log(self, event: str, **fields: Any) -> Dict[str, Any]:
+    def _record(self, event: str, **fields: Any) -> Dict[str, Any]:
         record = {"timestamp": datetime.now().isoformat(), "event": event, **fields}
         if self.turn is not None:
             record["turn"] = self.turn
-        with self.path.open("a", encoding="utf-8") as output:
-            output.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         return record
+
+    def _append(self, records: list[Dict[str, Any]]) -> None:
+        if not records:
+            return
+        with self.path.open("a", encoding="utf-8") as output:
+            for record in records:
+                output.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+
+    def log(self, event: str, **fields: Any) -> Dict[str, Any]:
+        record = self._record(event, **fields)
+        if self._transaction_records is not None:
+            self._transaction_records.append(record)
+        else:
+            self._append([record])
+        return record
+
+    def log_audit(self, event: str, **fields: Any) -> Dict[str, Any]:
+        """Write failure audit data immediately, outside the state-event buffer."""
+        record = self._record(event, **fields)
+        self._append([record])
+        return record
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Buffer state events and publish them only after the turn succeeds."""
+        if self._transaction_records is not None:
+            raise RuntimeError("Nested EventLogger transactions are not supported")
+
+        self._transaction_records = []
+        try:
+            yield
+        except Exception:
+            self._transaction_records = None
+            raise
+        else:
+            records = self._transaction_records
+            self._transaction_records = None
+            self._append(records)
+        finally:
+            self._transaction_records = None

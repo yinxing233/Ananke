@@ -49,6 +49,39 @@ class MemoryPipeline:
         self.relation_classifier = relation_classifier or LLMRelationClassifier(llm_client)
 
     def process(self, user_input: str, session_id: Optional[str] = None, *, system_guided: bool = False) -> Dict[str, List]:
+        snapshot = self.memory_store.snapshot()
+        try:
+            with self.event_logger.transaction():
+                with self.memory_store.transaction():
+                    return self._process_turn(user_input, session_id, system_guided)
+        except Exception as error:
+            rollback_error = None
+            try:
+                self.memory_store.restore(snapshot)
+            except Exception as restore_error:  # pragma: no cover - catastrophic filesystem failure
+                rollback_error = restore_error
+            self.event_logger.log_audit(
+                "turn_failed",
+                input_summary=user_input[:120],
+                session_id=session_id,
+                system_guided=system_guided,
+                error_type=type(error).__name__,
+                error=str(error),
+                rollback_succeeded=rollback_error is None,
+                rollback_error=str(rollback_error) if rollback_error else None,
+            )
+            if rollback_error is not None:
+                raise RuntimeError(
+                    f"Turn failed and rollback also failed: {rollback_error}"
+                ) from error
+            raise
+
+    def _process_turn(
+        self,
+        user_input: str,
+        session_id: Optional[str],
+        system_guided: bool,
+    ) -> Dict[str, List]:
         written: List[MemoryEntry] = []
         # 召回候选池：工作层 + 巩固层（慢层不参与召回，符合单向阀）。
         existing_cache = self.memory_store.get_working_memories() + self.memory_store.get_consolidated_memories()
