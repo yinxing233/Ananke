@@ -93,9 +93,15 @@ class LLMRelationClassifier(RelationClassifier):
     tools/evaluate.py, never here.
     """
 
-    def __init__(self, llm_client, temperature: float = 0.0) -> None:
+    def __init__(
+        self,
+        llm_client,
+        temperature: float = 0.0,
+        event_logger=None,
+    ) -> None:
         self.llm_client = llm_client
         self.temperature = temperature
+        self.event_logger = event_logger
 
     def classify(self, new_content: str, existing_content: str) -> str:
         prompt = (
@@ -114,7 +120,8 @@ class LLMRelationClassifier(RelationClassifier):
         # 解析失败 / 空响应 = 基础设施故障（超时/429/连接断），不等于 unrelated，
         # 不落盘、重试、最终 raise（C2：unrelated 是唯一不发光信号的类，每次故障折叠
         # 都无声吞掉一个潜在 EV 或 contradict）。
-        for _ in range(3):
+        for attempt in range(1, 4):
+            response = ""
             try:
                 response = self.llm_client.call_llm(
                     prompt, system_prompt=_LLM_SYSTEM_PROMPT, temperature=self.temperature
@@ -124,13 +131,25 @@ class LLMRelationClassifier(RelationClassifier):
                 token = response.lower().split()[0].strip(".,:;\"'")
                 if not token:
                     raise ValueError("关系分类响应无可解析 token（基础设施故障）")
-                label = _LABEL_NORMALIZE.get(token, REL_UNRELATED)
+                label = _LABEL_NORMALIZE.get(token)
+                if label is None:
+                    raise ValueError(f"unknown relation label: {token!r}")
                 # C1：只缓存合法归一化标签。
                 if cache:
                     cache.put("pairs", norm, label)
                 return label
             except ValueError as e:
                 last_err = e
+                if self.event_logger is not None:
+                    self.event_logger.log_audit(
+                        "classification_unparsed",
+                        raw_response=response[:200],
+                        attempt=attempt,
+                        max_attempts=3,
+                        error=str(e),
+                        new_content_summary=new_content[:120],
+                        existing_content_summary=existing_content[:120],
+                    )
                 continue
         raise last_err or RuntimeError("关系分类失败（基础设施故障且重试未恢复）")
 

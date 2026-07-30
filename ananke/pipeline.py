@@ -46,7 +46,10 @@ class MemoryPipeline:
         self.event_logger = event_logger
         self.promotion_strategy = promotion_strategy
         # 关系分类器：默认 LLM 五选一（方案乙）；测试/开发用 MockRelationClassifier。
-        self.relation_classifier = relation_classifier or LLMRelationClassifier(llm_client)
+        self.relation_classifier = relation_classifier or LLMRelationClassifier(
+            llm_client,
+            event_logger=event_logger,
+        )
 
     def process(self, user_input: str, session_id: Optional[str] = None, *, system_guided: bool = False) -> Dict[str, List]:
         snapshot = self.memory_store.snapshot()
