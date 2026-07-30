@@ -2,7 +2,7 @@
 
 > 本文件记录**当前**实现状态，可能数天到数月全部更换，理论不受影响。
 > 当前冻结历史协议见 `01_PROTOCOL_v3.md`；当前操作化草案见 `01_PROTOCOL_v4.md`，
-> PI 已验收但尚未实现的裁决见 `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；
+> PI 已验收且已实现的裁决见 `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；
 > 研究过程见 `03_RESEARCH_LOG.md`。
 
 ## 当前状态（2026-07-14，已升级协议 v3）
@@ -50,20 +50,20 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ---
 
-## v0.2 实现状态（2026-07-30 PI 验收后：**pre-audit 基线已保全，B1–B7 尚未实现**）
+## v0.2 实现状态（2026-07-30：**B1–B7 已实现并通过 70 项测试；协议仍未冻结**）
 
 > 协议 v4 是**草案、未冻结**。2026-07-28 形成的
 > [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 已于 2026-07-30 获 PI 验收，
-> 但这不是实现完成声明。当前 Python 保存在 pre-audit commit `05205a9`，基线测试实际重跑为
-> **43 passed**；下列审计差异在修复前阻断正式冒烟与验证：
+> 其实现已按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 完成。pre-audit Python 保存在
+> `05205a9`，当时基线为 **43 passed**；当前实现为 **70 passed**。以下原阻断项均已闭合：
 >
-> 1. 每轮非原子，当前 conv-26 状态已违反 WORKING 容量不变量；
-> 2. `evaluate.py` 会把“不包含”命中“包含”，且 judge 未收到 reference fact；
-> 3. 未知分类 token 仍可静默降级为 unrelated；
-> 4. run_corpus 丢弃 dia_id/speaker，事件缺少完整输入来源；
-> 5. EV 未按 distinct session 去重；
-> 6. CORE 尚未进入召回候选集；
-> 7. `system_guided` 只有接口和测试，正式 runner 中恒为 False。
+> 1. 轮级状态与状态事件采用事务提交；失败回滚并保留失败审计；
+> 2. `evaluate.py` 使用 question + reference fact，标签互斥，失败剔除并执行 5% 上限；
+> 3. 未知分类 token 重试三次后硬失败，不缓存、不降级 unrelated；
+> 4. run_corpus 贯通 `session_id/dia_id/speaker`，事件使用 `input_*`，记忆使用 `source_*`；
+> 5. EV 按 distinct session 去重，Frequency 的逐次激活语义保持不变；
+> 6. CORE 进入三层 top-1 召回并具备四关系守护，计数不驱动 v0.2 决策；
+> 7. `system_guided` 仍只是未启用接口，正式 runner 中恒为 False。
 >
 > **2026-07-22 Fable5 审查后修正（四项漂移，均已在冒烟前完成）**：详见 `docs/03_RESEARCH_LOG.md`。简述：
 > - **漂移1（最重，理论倒置）**：原 `conflict_trigger≥2 → 升 CORE` 是 v3「矛盾计为验证」EV 污染在第二道闸复活。改为 `conflict_trigger>0` = **CORE 晋升阻断器**（原则B：CORE 装经受住检验者，被矛盾=检验失败）。详见协议 §2.5。
@@ -73,11 +73,13 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ### 架构变更（v3→v4）：余弦判定 → 召回-分类两段式
 v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构升级**自然解除**，方向三作废：
-1. **当前召回（recall）**：新记忆 m 与既有 working+consolidated 记忆 e 余弦 ≥
-   `R_RECALL`(=0.65) 才进入下一步；B3 已裁决未来加入 CORE，但尚未实现。
+1. **当前召回（recall）**：新记忆 m 与既有 working+consolidated+core 记忆 e 余弦 ≥
+   `R_RECALL`(=0.65) 才进入下一步；同分按 `CORE > CONSOLIDATED > WORKING`。
 2. **分类（classification）**：关系分类器对 (m, e) 判 5 类：`duplicate / contradict / mergeable / related / unrelated`（协议 v4 §2.2）。
 3. **信号映射（v4 §2.3，受体语义 recipient semantics）**：
-   - duplicate → 跨 session 则 `external_validation +1`（且 `total_activation +1`）；同 session 仅去重；**不写**新记忆。
+   - duplicate → 每个非 guided 的后续 distinct session 首次命中才 `external_validation +1`；
+     同一后续 session 的后续命中只增加 Frequency 的 `total_activation`；创建 session 仅去重；
+     **不写**新记忆。
    - contradict → 受体 `conflict_trigger +1`；**写**新断言并与受体建**双向 conflict 链接**（漂移2 修正）；受体 `conflict_trigger>0` 即成为 CORE 晋升阻断器。
    - mergeable → 受体 `local_reorganization_trigger +1`；**不写**新记忆（信息多为冗余，留债）。
    - related → 受体 `internal_activation +1`；写新记忆（enrichment）。
@@ -92,16 +94,24 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - **改写 `pipeline.py`**：`process()` 走召回-分类；保留 working→consolidated 策略切换（`promotion_strategy` 槽）；新增 `relation_classifier` 注入 + `_link_conflict()`（双向矛盾链接）。
 - **改写 `reorganization.py`**：`apply_relation_event(recipient, action)` 受体语义累加 trigger + 记 `local_reorganization`。
 - **改写 `migration.py`**：`promote_consolidated_memories` 仅 merge trigger 晋升；conflict 阻断（记 `core_promotion_blocked`）。
-- **`models.py`**：`MemoryEntry` 加 `session_id`（创建 session）、`conflict_trigger`、`conflict_links: List[str]`（双向矛盾链接）字段。
+- **`models.py`**：`MemoryEntry` 使用
+  `source_session_id/source_dia_id/source_speaker` 保存创建来源，并持久化
+  `ev_contributing_session_ids`、`conflict_trigger`、`conflict_links`。
 - **`config.py`**：加 `R_RECALL=0.65`、`RELATION_CLASSIFIER_SCHEME`、`EVAL_LLM_*`、`EVAL_PARTIAL_CREDIT=0.5`；`LOCAL_REORG_THRESHOLD=2`；**删除 `CONFLICT_TRIGGER_THRESHOLD`**（old 晋升逻辑，漂移1 已删）；v3 余弦阈值降为 legacy 仅审计。
 - **`llm_client.py`**：加 `create_eval_llm_client()`（不同家族评判端）+ `MockEvaluationJudge`（子串匹配冒烟）。
 - 其余（embedding / extraction / activation / memory_store / logger / promotion）沿用 v3。
 
-### 事件日志类型（v4，全 10 类）
-`memory_write` / `memory_dedup_skip` / `external_validation`(跨 session 计 EV) / `internal_activation`(frequency 改用 total_activation) / `local_reorganization`(受体语义，action=mergeable|contradict) / `working_eviction` / `working_to_consolidated` / `consolidated_to_core` / **`conflict_link`**(双向矛盾链接，漂移2) / **`core_promotion_blocked`**(被矛盾冻结，漂移1)。
+### 事件日志
+状态事件包括 `memory_write` / `memory_dedup_skip` / `external_validation` /
+`internal_activation` / `local_reorganization` / `working_eviction` /
+`working_to_consolidated` / `consolidated_to_core` / `conflict_link` /
+`core_promotion_blocked`；失败审计另含 `classification_unparsed` 与 `turn_failed`。
+每个轮内事件均带 `input_session_id/input_dia_id/input_speaker/system_guided`。
 
 ### 工具（tools/）
-- `dev_simulate.py`（v4 移植）：确定性 MockRelationClassifier + MockEmbedding + ScriptedExtractionLLM，全 10 类事件验证（含 conflict_link / core_promotion_blocked）；支持 `--strategy/--data/--log`。
+- `dev_simulate.py`（v4 移植）：确定性 MockRelationClassifier + MockEmbedding +
+  ScriptedExtractionLLM，覆盖核心状态事件（含 conflict_link / core_promotion_blocked）；
+  支持 `--strategy/--data/--log`。
 - `run_corpus.py`：支持**会话感知语料**（.jsonl 含 `session_id`，或 .txt `# session: N` 标记）；`--strategy persistence|frequency` 对照。守反身性红线（只喂外部语料）。
 - **新增 `evaluate.py`**（v4 §5）：目标是独立家族 LLM 对 question + reference_fact 做
   reference-grounded 判定；当前 pre-audit 版本存在标签子串 bug、缺 reference fact 与失败折算
@@ -109,9 +119,10 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。只描述、不判定理论。
 
 ### 测试
-- 2026-07-28 基线实跑：`uv run pytest` → **43 passed**。现有测试覆盖缓存与主要 v4 信号映射，
-  但尚未覆盖评估契约、轮级原子性、distinct-session EV、来源元数据惰性及 CORE 进入召回后的
-  四关系处置；43/43 只证明 pre-audit 基线自洽，不证明 B1–B7 已实现。
+- 2026-07-28 pre-audit 基线：`uv run pytest` → **43 passed**。
+- 2026-07-30 实现后：`uv run pytest -q` → **70 passed**；覆盖评估契约、轮级原子性、
+  分类硬失败、distinct-session EV、来源元数据惰性、CORE 三层召回与四关系处置。
+- `uv run python -m compileall -q ananke tools tests` → 通过。
 
 ### 语料
 - 新增 `corpus_phase2.jsonl`（6 session 结构化）+ `corpus_phase2_probes.jsonl`（5 探针），供后续真实 LLM 冒烟 + 评估。
@@ -137,7 +148,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 ### 待办（v4 冻结前）—— 2026-07-28 审计更新
 - [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
 - [x] PI 已于 2026-07-30 验收 `DECISIONS_v0.2_freeze.md`。
-- [ ] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现。
+- [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；70/70 通过。
 - [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
 - [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。
 - [ ] 校准 `R_RECALL`、分类器甲/乙并完成 50 对人工锚点；部分计分已由 B6 定为 0.5。

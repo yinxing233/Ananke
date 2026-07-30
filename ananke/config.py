@@ -27,7 +27,9 @@ class Config:
     # 注：LOCAL_REORG_THRESHOLD 属中→慢闸(v4 §2.5)，定义移至下方 v4 段，此处不再重复。
 
     # 实验组/对照组开关：persistence（默认，External Selection）或 frequency（Internal Selection 对照组）。
-    # frequency 使用 total_activation（每次语义命中 cosine ≥ 0.60 即 +1，不区分来源），不复用 internal_activation。
+    # frequency 使用 total_activation：每次合格 duplicate/related/reorganization 信号均 +1；
+    # duplicate 的 EV 按 distinct session 去重，但非 guided 的后续跨 session 重复仍逐次累加
+    # total_activation。Frequency 不复用 internal_activation。
     WORKING_PROMOTION_STRATEGY = os.getenv("WORKING_PROMOTION_STRATEGY", "persistence")
 
     # ---- v3 遗留阈值（协议 v4 已弃用余弦判定，仅保留供审计/向后兼容）----
@@ -79,7 +81,7 @@ class Config:
     EVAL_LLM_API_KEY = os.getenv("EVAL_LLM_API_KEY", "")
     EVAL_LLM_BASE_URL = os.getenv("EVAL_LLM_BASE_URL", "")
     EVAL_LLM_MODEL = os.getenv("EVAL_LLM_MODEL", "deepseek-chat")
-    # "部分包含"计分：命中=1.0（包含），partial=该系数（待冒烟校准），不含=0.0
+    # B6 已验收定值："包含"=1.0，"部分"=0.5，"不包含"=0.0。
     EVAL_PARTIAL_CREDIT = float(os.getenv("EVAL_PARTIAL_CREDIT", "0.5"))
 
     # ---- 两级缓存（协议 v4 §8，续跑即重跑）----

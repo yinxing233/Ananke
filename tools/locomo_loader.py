@@ -172,7 +172,8 @@ def main() -> None:
     print(f"[ok] {sid} | {conv['speaker_a']}/{conv['speaker_b']} | sessions={len(sessions)} | 双 speaker 喂入")
     print(f"     语料: {len(corpus)} 条轮次(双speaker) -> {out_corpus}")
     print(f"     探针: {len(probes)} 条 qa -> {out_probes}")
-    print(f"     session_id: {sid}_s1 .. {sid}_s{len(sessions)}（跨 session 重复=EV，§3，与 speaker 无关）")
+    print(f"     session_id: {sid}_s1 .. {sid}_s{len(sessions)}"
+          f"（每个后续 distinct session 对同一记忆至多贡献一次 EV，B1；与 speaker 无关）")
     # evidence-speaker 统计（双 speaker 决策的事后佐证）
     print(f"     evidence speaker 分布: only_a={ev_stat['only_a']} only_b={ev_stat['only_b']} "
           f"both={ev_stat['both']} none={ev_stat['none']} unmatched={ev_stat['unmatched']}")

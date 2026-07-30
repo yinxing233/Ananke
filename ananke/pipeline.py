@@ -35,7 +35,8 @@ class MemoryPipeline:
       新提取记忆 m → 余弦召回(cos≥R_RECALL) 候选 e → 关系分类器(m,e) → 信号映射(§2.3)。
 
     激活(EV/IA)与重组触发(mergeable/contradict)均由「新记忆 m 与既有记忆 e 的关系」
-    驱动，而非 v3 的「输入文本 vs 记忆 余弦」。EV 仅跨 session 再断言时计（§3）。
+    驱动，而非 v3 的「输入文本 vs 记忆 余弦」。每个后续 distinct session 对同一记忆
+    至多贡献一次 EV（§3 / B1）。
     """
 
     def __init__(
