@@ -62,8 +62,12 @@ def load_eval(path: str) -> dict[str, dict]:
     本工具不再读 MemoryStore、不再自算命中率（P1-A 测量链纪律）。
     """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("evaluation_valid") is False:
+        raise ValueError(f"{path} is an invalid evaluation (judge failure rate exceeded)")
     out: dict[str, dict] = {}
     for r in payload.get("results", []):
+        if r.get("status") == "unscored" or r.get("max_hit") is None:
+            continue
         out[_norm(r["content"])] = {
             "content": r["content"],
             "layer": r.get("layer", ""),

@@ -206,7 +206,7 @@ def create_llm_client() -> BaseLLMClient:
     )
 
 
-def create_eval_llm_client() -> BaseLLMClient:
+def create_eval_llm_client(*, allow_mock: bool = False) -> BaseLLMClient:
     """v4 §5 评估独立性：评判端主裁判，**不同家族** LLM。
 
     与驱动端（embedding + Gemini 提取）刻意分离，结构化判定
@@ -214,11 +214,16 @@ def create_eval_llm_client() -> BaseLLMClient:
     评估端**禁止出现嵌入模型**（防驱动-评判度量循环）。
 
     工厂逻辑：
-      · USE_MOCK_LLM=true 或缺少评估端密钥 → MockEvaluationJudge（子串匹配，仅供冒烟）。
+      · 仅当 allow_mock=True 时，USE_MOCK_LLM=true 或缺少评估端密钥才返回
+        MockEvaluationJudge（子串匹配，仅供冒烟）。
       · 否则用 Config.EVAL_LLM_* 构造 OpenAICompatibleClient（默认 deepseek，与驱动端不同家族）。
     """
     if Config.USE_MOCK_LLM or not Config.EVAL_LLM_API_KEY:
-        return MockEvaluationJudge()
+        if allow_mock:
+            return MockEvaluationJudge()
+        raise RuntimeError(
+            "正式评估缺少真实 EVAL_LLM 配置；仅开发冒烟可显式传 allow_mock=True"
+        )
     provider = Config.EVAL_LLM_PROVIDER
     if provider in _OPENAI_COMPATIBLE:
         return OpenAICompatibleClient(
@@ -242,16 +247,23 @@ class MockEvaluationJudge(BaseLLMClient):
     """
 
     def call_llm(self, prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> str:
-        # prompt 形如：记忆=<content>。问题=<question>。请判定…
+        # prompt 形如：记忆=<content>。问题=<question>。标准事实=<reference_fact>。请判定…
         import re
         mem_m = re.search(r"记忆=([^\n。]*)", prompt)
-        q_m = re.search(r"问题=([^\n。]*)", prompt)
-        if not mem_m or not q_m:
+        fact_m = re.search(r"标准事实=([^\n。]*)", prompt)
+        if not mem_m or not fact_m:
             return "不包含"
-        content, question = mem_m.group(1).strip(), q_m.group(1).strip()
-        # 取问题里 2 字以上的实词（粗略：非标点连续段），任一出现在记忆中 → 包含/部分
-        tokens = [t for t in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{3,}", question)]
-        hit = sum(1 for t in tokens if t in content)
+        content = mem_m.group(1).strip().lower()
+        reference_fact = fact_m.group(1).strip().lower()
+        # 取标准事实里 2 字以上的实词，避免把问题话题相关性冒充正确证据。
+        tokens = [
+            token.lower()
+            for token in re.findall(
+                r"[\u4e00-\u9fff]{2,}|[A-Za-z]{3,}",
+                reference_fact,
+            )
+        ]
+        hit = sum(1 for token in tokens if token in content)
         if not tokens:
             return "不包含"
         if hit == len(tokens):
