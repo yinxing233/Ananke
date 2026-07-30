@@ -193,7 +193,7 @@ def main() -> None:
     # 自然语料上 contradict 高频可能使中层批量永久阻断 → core 晋升率趋零（v3 死结同构复现风险）。
     # 报告阻断率/core 数供 PI 判断第二道闸是否实质瘫痪（阈值~30%→冻结前重评阻断条件）。
     # 主测量不受影响：D 只测第一道闸，evaluate 测中层+core 两层之和，阻断只改记忆在哪层。
-    from ananke.migration import block_state_summary
+    from ananke.migration import block_state_summary, core_exact_duplicate_summary
     bs = block_state_summary(pipeline.memory_store)
     print(f"\n[block 可观测] 中层总数={bs['consolidated_total']} | "
           f"被阻断(conflict>0)={bs['blocked_count']} | 阻断率={bs['block_rate']:.1%} | "
@@ -201,6 +201,16 @@ def main() -> None:
     if bs["consolidated_total"] and bs["block_rate"] >= 0.30:
         print(f"  [!] 阻断率≥30%：第二道闸可能实质瘫痪。冻结前须重评阻断条件"
               f"（如改 conflict_trigger>merge_trigger 相对判据）。详见协议 v4 §2.5。")
+
+    duplicate_summary = core_exact_duplicate_summary(pipeline.memory_store)
+    print(
+        "\n[CORE exact duplicate 描述性指标] "
+        f"CORE={duplicate_summary['core_count']} | "
+        f"normalized unique={duplicate_summary['unique_normalized_count']} | "
+        f"重复条目={duplicate_summary['duplicate_entry_count']} | "
+        f"重复组={duplicate_summary['duplicate_group_count']} | "
+        f"重复率={duplicate_summary['normalized_exact_duplicate_rate']:.1%}"
+    )
 
     # 两级缓存统计（协议 v4 §8）：命中率高=续跑近乎零 API；miss=首跑新调用。
     cache = getattr(llm, "cache", None)

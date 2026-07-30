@@ -1,8 +1,10 @@
+from collections import Counter
 from typing import List
 
 from ananke.config import Config
 from ananke.models import LayerEnum, MemoryEntry
 from ananke.promotion import WorkingPromotionStrategy, promotion_strategy_from_config
+from ananke.text_norm import normalize
 
 
 def enforce_working_capacity(memory_store, event_logger, strategy=None) -> None:
@@ -113,4 +115,21 @@ def block_state_summary(memory_store) -> dict:
         "blocked_count": len(blocked),
         "block_rate": (len(blocked) / total_mid) if total_mid else 0.0,
         "core_count": len(core),
+    }
+
+
+def core_exact_duplicate_summary(memory_store) -> dict:
+    """Describe normalized exact duplicates in CORE without mutating state."""
+    core = memory_store.get_core_memories()
+    counts = Counter(normalize(memory.content) for memory in core)
+    duplicate_groups = [count for count in counts.values() if count > 1]
+    duplicate_entries = sum(count - 1 for count in duplicate_groups)
+    return {
+        "core_count": len(core),
+        "unique_normalized_count": len(counts),
+        "duplicate_entry_count": duplicate_entries,
+        "duplicate_group_count": len(duplicate_groups),
+        "normalized_exact_duplicate_rate": (
+            duplicate_entries / len(core) if core else 0.0
+        ),
     }

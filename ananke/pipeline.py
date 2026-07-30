@@ -20,6 +20,12 @@ from ananke.relation import (
     LLMRelationClassifier,
 )
 
+_RECALL_LAYER_PRIORITY = {
+    LayerEnum.CORE: 0,
+    LayerEnum.CONSOLIDATED: 1,
+    LayerEnum.WORKING: 2,
+}
+
 
 class MemoryPipeline:
     """Orchestrates the one-way three-layer memory lifecycle (protocol v4).
@@ -106,8 +112,12 @@ class MemoryPipeline:
         system_guided: bool,
     ) -> Dict[str, List]:
         written: List[MemoryEntry] = []
-        # 召回候选池：工作层 + 巩固层（慢层不参与召回，符合单向阀）。
-        existing_cache = self.memory_store.get_working_memories() + self.memory_store.get_consolidated_memories()
+        # B3：三层都参与召回；CORE 的稳定来自高写入/修改门槛，而不是读取隔离。
+        existing_cache = (
+            self.memory_store.get_working_memories()
+            + self.memory_store.get_consolidated_memories()
+            + self.memory_store.get_core_memories()
+        )
         existing_vecs = (
             [self.embedding_engine.encode(m.content)[0] for m in existing_cache] if existing_cache else []
         )
@@ -150,10 +160,26 @@ class MemoryPipeline:
         for memory, vec in zip(existing_cache, existing_vecs):
             sim = self.embedding_engine.cosine_similarity(cand_vec, vec)
             if sim >= Config.R_RECALL:
-                # 确定性 tie-break（协议 v4 §8 确定性审计）：余弦平票时按 (content, id) 字典序
-                # 取较小者。content 跨运行一致（提取缓存命中）→ 重放等价；id(uuid) 仅作同 content
-                # 兜底（业务无差别）。避免列表顺序依赖导致的非确定性渗入 D。
-                if sim > best_sim or (sim == best_sim and (best is None or (memory.content, memory.id) < (best.content, best.id))):
+                # B3 同分裁决：CORE > CONSOLIDATED > WORKING；同层再按
+                # (content, id) 稳定兜底，禁止容器遍历顺序渗入 D。
+                memory_key = (
+                    _RECALL_LAYER_PRIORITY[memory.layer],
+                    memory.content,
+                    memory.id,
+                )
+                best_key = (
+                    (
+                        _RECALL_LAYER_PRIORITY[best.layer],
+                        best.content,
+                        best.id,
+                    )
+                    if best is not None
+                    else None
+                )
+                if sim > best_sim or (
+                    sim == best_sim
+                    and (best_key is None or memory_key < best_key)
+                ):
                     best, best_sim = memory, sim
         return best, best_sim
 

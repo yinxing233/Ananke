@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from ananke.config import Config
-from ananke.models import MemoryEntry
+from ananke.models import LayerEnum, MemoryEntry
 from ananke.relation import REL_CONTRADICT, REL_MERGEABLE
 
 
@@ -37,10 +37,15 @@ def apply_relation_event(
     recipient.total_activation += 1
     recipient.last_activated_at = datetime.now()
     memory_store.update(recipient)
+    incoming_for_audit = (
+        incoming_content
+        if recipient.layer is LayerEnum.CORE
+        else incoming_content[:120]
+    )
     event_logger.log(
         "local_reorganization",
         recipient_memory_id=recipient.id,
-        incoming_content=incoming_content[:120],
+        incoming_content=incoming_for_audit,
         action=action,
         cosine_similarity=round(similarity, 3),
         local_reorganization_trigger=recipient.local_reorganization_trigger,
