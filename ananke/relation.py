@@ -115,6 +115,22 @@ class LLMRelationClassifier(RelationClassifier):
         norm = normalize(new_content) + "||" + normalize(existing_content)
         cached = cache.get("pairs", norm) if cache else None
         if cached is not None:
+            if cached not in RELATION_LABELS:
+                error = ValueError(
+                    f"invalid cached relation label: {cached!r}"
+                )
+                if self.event_logger is not None:
+                    self.event_logger.log_audit(
+                        "classification_unparsed",
+                        raw_response=cached[:200],
+                        attempt=0,
+                        max_attempts=0,
+                        error=str(error),
+                        source="cache",
+                        new_content_summary=new_content[:120],
+                        existing_content_summary=existing_content[:120],
+                    )
+                raise error
             return cached  # 命中：已是归一化标签（C1），直接返回
         last_err: Optional[Exception] = None
         # 解析失败 / 空响应 = 基础设施故障（超时/429/连接断），不等于 unrelated，
@@ -147,6 +163,7 @@ class LLMRelationClassifier(RelationClassifier):
                         attempt=attempt,
                         max_attempts=3,
                         error=str(e),
+                        source="llm",
                         new_content_summary=new_content[:120],
                         existing_content_summary=existing_content[:120],
                     )

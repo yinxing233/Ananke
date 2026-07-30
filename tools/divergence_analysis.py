@@ -66,23 +66,33 @@ def load_eval(path: str) -> dict[str, dict]:
         raise ValueError(f"{path} is an invalid evaluation (judge failure rate exceeded)")
     out: dict[str, dict] = {}
     for r in payload.get("results", []):
-        if r.get("status") == "unscored" or r.get("max_hit") is None:
-            continue
+        max_hit = r.get("max_hit")
+        evidence_backed = r.get("evidence_backed")
         out[_norm(r["content"])] = {
             "content": r["content"],
             "layer": r.get("layer", ""),
             "ev": r.get("ev", 0),
-            "judge_hit": float(r.get("max_hit", 0.0)),
-            "evidence_backed": bool(r.get("evidence_backed", False)),
+            "judge_hit": float(max_hit) if max_hit is not None else None,
+            "evidence_backed": (
+                bool(evidence_backed)
+                if evidence_backed is not None
+                else None
+            ),
+            "status": r.get("status", "scored"),
         }
     return out
 
 
 def _judge_hit_rate(items: list[dict]) -> float:
-    """judge 端证据命中率 = 被 evidence_backed 的记忆占比（evidence_backed 来自评判端）。"""
-    if not items:
+    """Judge hit rate over scored memories; unscored memories remain in P/F."""
+    scored = [
+        memory
+        for memory in items
+        if memory.get("evidence_backed") is not None
+    ]
+    if not scored:
         return float("nan")
-    return sum(1 for m in items if m["evidence_backed"]) / len(items)
+    return sum(1 for memory in scored if memory["evidence_backed"]) / len(scored)
 
 
 def analyze(persistence: dict, frequency: dict) -> dict:

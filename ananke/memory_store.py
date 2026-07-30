@@ -42,12 +42,18 @@ class MemoryStore:
         if not ordered:
             return
 
-        originals: Dict[LayerEnum, Optional[bytes]] = {}
+        originals: Dict[LayerEnum, Optional[bytes]] = {
+            layer: (
+                self._path(layer).read_bytes()
+                if self._path(layer).exists()
+                else None
+            )
+            for layer in ordered
+        }
         prepared: Dict[LayerEnum, Path] = {}
         try:
             for layer in ordered:
                 path = self._path(layer)
-                originals[layer] = path.read_bytes() if path.exists() else None
                 temp_path = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
                 temp_path.write_text(self._serialize(layer), encoding="utf-8")
                 prepared[layer] = temp_path

@@ -115,3 +115,23 @@ def test_b7_only_successful_retry_is_cached(tmp_path):
         "classification_unparsed",
     ]
     assert "turn_failed" not in {record["event"] for record in records}
+
+
+def test_b7_invalid_cached_label_fails_closed(tmp_path):
+    pipeline, llm = _pipeline(tmp_path, ["duplicate"])
+    llm.cache.values[("pairs", "same fact||same fact")] = "bogus"
+
+    with pytest.raises(ValueError, match="invalid cached relation label"):
+        pipeline.process("input", session_id="s2")
+
+    memory = pipeline.memory_store.find("existing")
+    assert memory.external_validation == 0
+    assert [item.id for item in pipeline.memory_store.get_working_memories()] == [
+        "existing"
+    ]
+    records = _records(tmp_path / "events.jsonl")
+    assert [record["event"] for record in records] == [
+        "classification_unparsed",
+        "turn_failed",
+    ]
+    assert records[0]["source"] == "cache"

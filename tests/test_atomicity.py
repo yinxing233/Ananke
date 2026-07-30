@@ -1,6 +1,7 @@
 """A3 轮级原子性与失败审计守护测试。"""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -106,3 +107,78 @@ def test_a3_failure_audit_bypasses_rolled_back_state_buffer(tmp_path):
 
     records = _records(log_path)
     assert [record["event"] for record in records] == ["classification_unparsed"]
+
+
+def test_a3_partial_state_log_flush_is_truncated_and_state_is_restored(
+    tmp_path,
+    monkeypatch,
+):
+    data_dir = tmp_path / "data"
+    log_path = tmp_path / "events.jsonl"
+    logger = EventLogger(log_path)
+    store = MemoryStore(data_dir)
+    pipeline = MemoryPipeline(
+        store,
+        _Embedding(),
+        _ExtractionLLM(),
+        logger,
+        relation_classifier=MockRelationClassifier(REL_RELATED),
+    )
+    original_append = logger._append
+
+    def partially_write_then_fail(records):
+        if any(record["event"] == "memory_write" for record in records):
+            with log_path.open("a", encoding="utf-8") as output:
+                output.write(json.dumps(records[0]) + "\n")
+            raise OSError("log flush failed")
+        original_append(records)
+
+    monkeypatch.setattr(logger, "_append", partially_write_then_fail)
+
+    with pytest.raises(OSError, match="log flush failed"):
+        pipeline.process("input", session_id="s2")
+
+    assert store.get_working_memories() == []
+    assert MemoryStore(data_dir).get_working_memories() == []
+    assert [record["event"] for record in _records(log_path)] == ["turn_failed"]
+
+
+def test_a3_prepare_failure_preserves_every_existing_layer_file(
+    tmp_path,
+    monkeypatch,
+):
+    data_dir = tmp_path / "data"
+    store = MemoryStore(data_dir)
+    from ananke.models import LayerEnum
+
+    store.add(MemoryEntry(id="working", content="w", layer=LayerEnum.WORKING))
+    store.add(
+        MemoryEntry(
+            id="consolidated",
+            content="c",
+            layer=LayerEnum.CONSOLIDATED,
+        )
+    )
+    store.add(MemoryEntry(id="core", content="k", layer=LayerEnum.CORE))
+    originals = {
+        layer: store._path(layer).read_bytes()
+        for layer in LayerEnum
+    }
+
+    original_write_text = Path.write_text
+
+    def fail_first_prepare(path, *args, **kwargs):
+        if (
+            path.name.startswith(".consolidated.jsonl.")
+            and path.name.endswith(".tmp")
+        ):
+            raise OSError("prepare failed")
+        return original_write_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", fail_first_prepare)
+
+    with pytest.raises(OSError, match="prepare failed"):
+        store._persist_layers(LayerEnum)
+
+    for layer in LayerEnum:
+        assert store._path(layer).read_bytes() == originals[layer]

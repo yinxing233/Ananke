@@ -75,6 +75,16 @@ class EventLogger:
         else:
             records = self._transaction_records
             self._transaction_records = None
-            self._append(records)
+            path_existed = self.path.exists()
+            original_size = self.path.stat().st_size if path_existed else 0
+            try:
+                self._append(records)
+            except Exception:
+                if path_existed:
+                    with self.path.open("r+b") as output:
+                        output.truncate(original_size)
+                else:
+                    self.path.unlink(missing_ok=True)
+                raise
         finally:
             self._transaction_records = None

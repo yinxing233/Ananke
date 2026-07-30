@@ -1,6 +1,7 @@
 """A1+B6 reference-grounded 评估契约守护测试。"""
 
 import json
+import math
 
 import pytest
 
@@ -14,6 +15,7 @@ from tools.evaluate import (
     load_probes,
     parse_verdict,
 )
+from tools.divergence_analysis import analyze, load_eval
 
 
 class _Judge:
@@ -129,3 +131,63 @@ def test_b6_mock_judge_requires_explicit_smoke_opt_in(monkeypatch):
         create_eval_llm_client(allow_mock=True),
         MockEvaluationJudge,
     )
+
+
+def test_b6_unscored_memory_remains_in_promoted_set_but_not_hit_denominator(
+    tmp_path,
+):
+    persistence_path = tmp_path / "p.json"
+    frequency_path = tmp_path / "f.json"
+    persistence_path.write_text(
+        json.dumps(
+            {
+                "evaluation_valid": True,
+                "results": [
+                    {
+                        "content": "shared fact",
+                        "layer": "CONSOLIDATED",
+                        "ev": 1,
+                        "max_hit": 1.0,
+                        "evidence_backed": True,
+                        "status": "scored",
+                    },
+                    {
+                        "content": "unscored persistence fact",
+                        "layer": "CONSOLIDATED",
+                        "ev": 0,
+                        "max_hit": None,
+                        "evidence_backed": None,
+                        "status": "unscored",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    frequency_path.write_text(
+        json.dumps(
+            {
+                "evaluation_valid": True,
+                "results": [
+                    {
+                        "content": "shared fact",
+                        "layer": "CONSOLIDATED",
+                        "ev": 1,
+                        "max_hit": 1.0,
+                        "evidence_backed": True,
+                        "status": "scored",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    persistence = load_eval(str(persistence_path))
+    frequency = load_eval(str(frequency_path))
+    report = analyze(persistence, frequency)
+
+    assert len(persistence) == 2
+    assert report["n_promoted_P"] == 2
+    assert report["n_only_P"] == 1
+    assert math.isnan(report["hit_rate_onlyP_judge"])

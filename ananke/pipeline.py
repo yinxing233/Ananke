@@ -16,6 +16,7 @@ from ananke.relation import (
     REL_DUPLICATE,
     REL_MERGEABLE,
     REL_RELATED,
+    RELATION_LABELS,
     RelationClassifier,
     LLMRelationClassifier,
 )
@@ -133,6 +134,20 @@ class MemoryPipeline:
                 continue
 
             relation = self.relation_classifier.classify(content, candidate.content)
+            if relation not in RELATION_LABELS:
+                self.event_logger.log_audit(
+                    "classification_unparsed",
+                    raw_response=str(relation)[:200],
+                    attempt=1,
+                    max_attempts=1,
+                    error=f"invalid classifier relation label: {relation!r}",
+                    source="classifier",
+                    new_content_summary=content[:120],
+                    existing_content_summary=candidate.content[:120],
+                )
+                raise ValueError(
+                    f"invalid classifier relation label: {relation!r}"
+                )
             write_new, link_recipient = self._handle_relation(
                 content, candidate, relation, best_sim, session_id, system_guided
             )
