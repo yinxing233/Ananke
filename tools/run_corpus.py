@@ -29,6 +29,7 @@ import json
 import re
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,8 +44,16 @@ from ananke.memory_store import MemoryStore
 from ananke.pipeline import MemoryPipeline
 
 
-def load_corpus(path: Path) -> list[tuple[str, str | None]]:
-    """加载语料，返回 [(input_text, session_id), ...]。
+@dataclass(frozen=True)
+class CorpusTurn:
+    text: str
+    session_id: str | None
+    dia_id: str | None = None
+    speaker: str | None = None
+
+
+def load_corpus(path: Path) -> list[CorpusTurn]:
+    """加载语料，保留每轮 input/session/dia/speaker 来源。
 
     支持三种格式：
     - .jsonl 每行含 {session_id, input}（或 {session/text/user/content}）。
@@ -53,7 +62,7 @@ def load_corpus(path: Path) -> list[tuple[str, str | None]]:
       仅用于 IA/dedup 演示）。
     """
     text = path.read_text(encoding="utf-8")
-    items: list[tuple[str, str | None]] = []
+    items: list[CorpusTurn] = []
     default_session = "s1"
     current_session: str | None = default_session
     if path.suffix == ".jsonl":
@@ -65,7 +74,14 @@ def load_corpus(path: Path) -> list[tuple[str, str | None]]:
             val = obj.get("input") or obj.get("text") or obj.get("user") or obj.get("content")
             sid = obj.get("session_id") or obj.get("session") or obj.get("sid")
             if isinstance(val, str) and val.strip():
-                items.append((val.strip(), sid))
+                items.append(
+                    CorpusTurn(
+                        text=val.strip(),
+                        session_id=sid,
+                        dia_id=obj.get("dia_id"),
+                        speaker=obj.get("speaker"),
+                    )
+                )
     else:
         for line in text.splitlines():
             line = line.strip()
@@ -75,7 +91,7 @@ def load_corpus(path: Path) -> list[tuple[str, str | None]]:
             if marker:
                 current_session = marker.group(1)
                 continue
-            items.append((line, current_session))
+            items.append(CorpusTurn(text=line, session_id=current_session))
     return items
 
 
@@ -152,19 +168,24 @@ def main() -> None:
         EventLogger(args.log),
     )
 
-    sessions = sorted({sid for _, sid in corpus if sid})
+    sessions = sorted({turn.session_id for turn in corpus if turn.session_id})
     print(f"[info] 真实 LLM 模式: {type(llm).__name__} | 嵌入模型: {Config.EMBEDDING_MODEL}")
     print(f"[info] 迁移策略: {Config.WORKING_PROMOTION_STRATEGY} | 语料条数: {len(corpus)} | session 数: {len(sessions)}")
     print(f"[info] 日志 → {args.log}\n")
 
-    for i, (line, session_id) in enumerate(corpus, 1):
+    for i, turn in enumerate(corpus, 1):
         pipeline.event_logger.turn = i  # 标记轮序号，供重放等价性推断原始轮数（D 内置）
-        result = pipeline.process(line, session_id=session_id)
+        result = pipeline.process(
+            turn.text,
+            session_id=turn.session_id,
+            dia_id=turn.dia_id,
+            speaker=turn.speaker,
+        )
         n_write = len(result["written"])
         n_consol = len(result["consolidated"])
         n_core = len(result["core"])
-        tag = f"[{session_id}]" if session_id else ""
-        print(f"[{i:>3}/{len(corpus)}]{tag} +{n_write}记忆 | 升巩固层 {n_consol} | 升慢层 {n_core} | {line[:30]}")
+        tag = f"[{turn.session_id}]" if turn.session_id else ""
+        print(f"[{i:>3}/{len(corpus)}]{tag} +{n_write}记忆 | 升巩固层 {n_consol} | 升慢层 {n_core} | {turn.text[:30]}")
 
     print(f"\n[done] 完成。分析: uv run python tools/analyze_trajectory.py --log {args.log} --data {args.data}")
 

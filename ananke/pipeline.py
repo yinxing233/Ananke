@@ -51,38 +51,58 @@ class MemoryPipeline:
             event_logger=event_logger,
         )
 
-    def process(self, user_input: str, session_id: Optional[str] = None, *, system_guided: bool = False) -> Dict[str, List]:
-        snapshot = self.memory_store.snapshot()
-        try:
-            with self.event_logger.transaction():
-                with self.memory_store.transaction():
-                    return self._process_turn(user_input, session_id, system_guided)
-        except Exception as error:
-            rollback_error = None
+    def process(
+        self,
+        user_input: str,
+        session_id: Optional[str] = None,
+        *,
+        dia_id: Optional[str] = None,
+        speaker: Optional[str] = None,
+        system_guided: bool = False,
+    ) -> Dict[str, List]:
+        with self.event_logger.context(
+            input_session_id=session_id,
+            input_dia_id=dia_id,
+            input_speaker=speaker,
+            system_guided=system_guided,
+        ):
+            snapshot = self.memory_store.snapshot()
             try:
-                self.memory_store.restore(snapshot)
-            except Exception as restore_error:  # pragma: no cover - catastrophic filesystem failure
-                rollback_error = restore_error
-            self.event_logger.log_audit(
-                "turn_failed",
-                input_summary=user_input[:120],
-                session_id=session_id,
-                system_guided=system_guided,
-                error_type=type(error).__name__,
-                error=str(error),
-                rollback_succeeded=rollback_error is None,
-                rollback_error=str(rollback_error) if rollback_error else None,
-            )
-            if rollback_error is not None:
-                raise RuntimeError(
-                    f"Turn failed and rollback also failed: {rollback_error}"
-                ) from error
-            raise
+                with self.event_logger.transaction():
+                    with self.memory_store.transaction():
+                        return self._process_turn(
+                            user_input,
+                            session_id,
+                            dia_id,
+                            speaker,
+                            system_guided,
+                        )
+            except Exception as error:
+                rollback_error = None
+                try:
+                    self.memory_store.restore(snapshot)
+                except Exception as restore_error:  # pragma: no cover - catastrophic filesystem failure
+                    rollback_error = restore_error
+                self.event_logger.log_audit(
+                    "turn_failed",
+                    input_summary=user_input[:120],
+                    error_type=type(error).__name__,
+                    error=str(error),
+                    rollback_succeeded=rollback_error is None,
+                    rollback_error=str(rollback_error) if rollback_error else None,
+                )
+                if rollback_error is not None:
+                    raise RuntimeError(
+                        f"Turn failed and rollback also failed: {rollback_error}"
+                    ) from error
+                raise
 
     def _process_turn(
         self,
         user_input: str,
         session_id: Optional[str],
+        dia_id: Optional[str],
+        speaker: Optional[str],
         system_guided: bool,
     ) -> Dict[str, List]:
         written: List[MemoryEntry] = []
@@ -96,7 +116,7 @@ class MemoryPipeline:
             candidate, best_sim = self._recall(content, existing_cache, existing_vecs)
             if candidate is None:
                 # 无候选（余弦召回空集）→ 视为 unrelated，直接写入快层。
-                memory = self._write(content, session_id)
+                memory = self._write(content, session_id, dia_id, speaker)
                 written.append(memory)
                 existing_cache.append(memory)
                 existing_vecs.append(self.embedding_engine.encode(content)[0])
@@ -107,7 +127,7 @@ class MemoryPipeline:
                 content, candidate, relation, best_sim, session_id, system_guided
             )
             if write_new:
-                memory = self._write(content, session_id)
+                memory = self._write(content, session_id, dia_id, speaker)
                 written.append(memory)
                 existing_cache.append(memory)
                 existing_vecs.append(self.embedding_engine.encode(content)[0])
@@ -157,8 +177,8 @@ class MemoryPipeline:
         """
         cross_session = (
             session_id is not None
-            and recipient.session_id is not None
-            and session_id != recipient.session_id
+            and recipient.source_session_id is not None
+            and session_id != recipient.source_session_id
         )
 
         if relation == REL_DUPLICATE:
@@ -230,11 +250,29 @@ class MemoryPipeline:
             recipient_content=recipient.content[:120],
         )
 
-    def _write(self, content: str, session_id: Optional[str]) -> MemoryEntry:
-        memory = MemoryEntry(id=str(uuid4()), content=content, session_id=session_id)
+    def _write(
+        self,
+        content: str,
+        session_id: Optional[str],
+        dia_id: Optional[str],
+        speaker: Optional[str],
+    ) -> MemoryEntry:
+        memory = MemoryEntry(
+            id=str(uuid4()),
+            content=content,
+            source_session_id=session_id,
+            source_dia_id=dia_id,
+            source_speaker=speaker,
+        )
         self.memory_store.add(memory)
         self.event_logger.log(
-            "memory_write", memory_id=memory.id, content_summary=content[:120], layer=memory.layer.value
+            "memory_write",
+            memory_id=memory.id,
+            content_summary=content[:120],
+            layer=memory.layer.value,
+            source_session_id=memory.source_session_id,
+            source_dia_id=memory.source_dia_id,
+            source_speaker=memory.source_speaker,
         )
         return memory
 

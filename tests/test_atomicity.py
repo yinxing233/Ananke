@@ -87,7 +87,7 @@ def test_a3_failed_turn_rolls_back_state_and_state_events(tmp_path, monkeypatch)
     records = _records(log_path)
     assert [record["event"] for record in records] == ["turn_failed"]
     assert records[0]["error_type"] == "RuntimeError"
-    assert records[0]["session_id"] == "s2"
+    assert records[0]["input_session_id"] == "s2"
 
 
 def test_a3_failure_audit_bypasses_rolled_back_state_buffer(tmp_path):

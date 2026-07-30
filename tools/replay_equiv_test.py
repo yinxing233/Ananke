@@ -193,9 +193,14 @@ def main() -> None:
         EventLogger(args.replay_log),
     )
     print(f"\n[replay] 重放 {len(corpus)} 轮（缓存命中应零新 API 调用）...")
-    for i, (line, sid) in enumerate(corpus, 1):
+    for i, turn in enumerate(corpus, 1):
         pipeline.event_logger.turn = i  # 重放也标记轮序号，与原始日志对齐
-        pipeline.process(line, session_id=sid)
+        pipeline.process(
+            turn.text,
+            session_id=turn.session_id,
+            dia_id=turn.dia_id,
+            speaker=turn.speaker,
+        )
 
     cache = getattr(llm, "cache", None)
     if cache is not None:

@@ -16,9 +16,15 @@ class EventLogger:
         # 显式 opt-in）。不参与业务语义，重放指纹比对时忽略。
         self.turn: Optional[int] = None
         self._transaction_records: Optional[list[Dict[str, Any]]] = None
+        self._context_fields: Dict[str, Any] = {}
 
     def _record(self, event: str, **fields: Any) -> Dict[str, Any]:
-        record = {"timestamp": datetime.now().isoformat(), "event": event, **fields}
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "event": event,
+            **self._context_fields,
+            **fields,
+        }
         if self.turn is not None:
             record["turn"] = self.turn
         return record
@@ -43,6 +49,16 @@ class EventLogger:
         record = self._record(event, **fields)
         self._append([record])
         return record
+
+    @contextmanager
+    def context(self, **fields: Any) -> Iterator[None]:
+        """Attach immutable turn-source metadata to every state and audit event."""
+        previous = self._context_fields
+        self._context_fields = {**previous, **fields}
+        try:
+            yield
+        finally:
+            self._context_fields = previous
 
     @contextmanager
     def transaction(self) -> Iterator[None]:

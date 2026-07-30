@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import AliasChoices, BaseModel, Field, computed_field
 
 from ananke.config import Config
 
@@ -26,7 +26,12 @@ class MemoryEntry(BaseModel):
     conflict_trigger: int = 0              # contradict 累积（v4 §2.3，与 mergeable 分开计）。
                                            # 一旦 >0 即成为 CORE 晋升阻断器（Fable5 漂移1：被矛盾=被检验失败，非确认）。
     conflict_links: List[str] = Field(default_factory=list)  # 双向矛盾链接：与本条记忆相互矛盾的记忆 id 列表（v4 §2.3/漂移2）
-    session_id: Optional[str] = None       # 记忆首次写入时所属 session；跨 session 再断言 = EV 的独立性代理（v4 §3）
+    source_session_id: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("source_session_id", "session_id"),
+    )
+    source_dia_id: Optional[str] = None
+    source_speaker: Optional[str] = None
     source_ids: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
 
