@@ -55,7 +55,7 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 > 协议 v4 是**草案、未冻结**。2026-07-28 形成的
 > [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 已于 2026-07-30 获 PI 验收，
 > 其实现已按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 完成。pre-audit Python 保存在
-> `05205a9`，当时基线为 **43 passed**；当前实现为 **70 passed**。以下原阻断项均已闭合：
+> `05205a9`，当时基线为 **43 passed**；B1–B7 完成时为 **70 passed**，2026-08-02 来源上下文保真修复后当前为 **73 passed**。以下原阻断项均已闭合：
 >
 > 1. 轮级状态与状态事件采用事务提交；失败回滚并保留失败审计；
 > 2. `evaluate.py` 使用 question + reference fact，标签互斥，失败剔除并执行 5% 上限；
@@ -64,6 +64,7 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 > 5. EV 按 distinct session 去重，Frequency 的逐次激活语义保持不变；
 > 6. CORE 进入三层 top-1 召回并具备四关系守护，计数不驱动 v0.2 决策；
 > 7. `system_guided` 仍只是未启用接口，正式 runner 中恒为 False。
+> 8. LoCoMo 的 `speaker` 与 `session_<n>_date_time` 已贯通到提取 prompt、缓存键、记忆来源元数据与事件上下文；适配器缺任一可用字段时 fail closed，避免跨人物/跨日期缓存复用制造假 duplicate/EV。
 >
 > **2026-07-22 Fable5 审查后修正（四项漂移，均已在冒烟前完成）**：详见 `docs/03_RESEARCH_LOG.md`。简述：
 > - **漂移1（最重，理论倒置）**：原 `conflict_trigger≥2 → 升 CORE` 是 v3「矛盾计为验证」EV 污染在第二道闸复活。改为 `conflict_trigger>0` = **CORE 晋升阻断器**（原则B：CORE 装经受住检验者，被矛盾=检验失败）。详见协议 §2.5。
@@ -96,7 +97,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - **改写 `migration.py`**：`promote_consolidated_memories` 仅 merge trigger 晋升；conflict 阻断（记 `core_promotion_blocked`）。
 - **`models.py`**：`MemoryEntry` 使用
   `source_session_id/source_dia_id/source_speaker` 保存创建来源，并持久化
-  `ev_contributing_session_ids`、`conflict_trigger`、`conflict_links`。
+  `source_session_datetime`、`ev_contributing_session_ids`、`conflict_trigger`、`conflict_links`。
 - **`config.py`**：加 `R_RECALL=0.65`、`RELATION_CLASSIFIER_SCHEME`、`EVAL_LLM_*`、`EVAL_PARTIAL_CREDIT=0.5`；`LOCAL_REORG_THRESHOLD=2`；**删除 `CONFLICT_TRIGGER_THRESHOLD`**（old 晋升逻辑，漂移1 已删）；v3 余弦阈值降为 legacy 仅审计。
 - **`llm_client.py`**：加 `create_eval_llm_client()`（不同家族评判端）+ `MockEvaluationJudge`（子串匹配冒烟）。
 - 其余（embedding / extraction / activation / memory_store / logger / promotion）沿用 v3。
@@ -120,8 +121,9 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 
 ### 测试
 - 2026-07-28 pre-audit 基线：`uv run pytest` → **43 passed**。
-- 2026-07-30 实现后：`uv run pytest -q` → **70 passed**；覆盖评估契约、轮级原子性、
-  分类硬失败、distinct-session EV、来源元数据惰性、CORE 三层召回与四关系处置。
+- 2026-07-30 B1–B7 实现后：`uv run pytest -q` → **70 passed**；2026-08-02 来源上下文
+  保真修复后 → **73 passed**。覆盖评估契约、轮级原子性、分类硬失败、distinct-session EV、
+  来源元数据贯通与上下文缓存隔离、CORE 三层召回与四关系处置。
 - `uv run python -m compileall -q ananke tools tests` → 通过。
 
 ### 语料
@@ -148,7 +150,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 ### 待办（v4 冻结前）—— 2026-07-28 审计更新
 - [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
 - [x] PI 已于 2026-07-30 验收 `DECISIONS_v0.2_freeze.md`。
-- [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；70/70 通过。
+- [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；当时 70/70 通过，来源上下文保真修复后 73/73 通过。
 - [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
 - [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。
 - [ ] 校准 `R_RECALL`、分类器甲/乙并完成 50 对人工锚点；部分计分已由 B6 定为 0.5。

@@ -55,6 +55,42 @@ def test_extraction_cache_different_input_misses(tmp_path):
     assert llm.calls == 2
 
 
+def test_extraction_cache_isolated_by_speaker_and_datetime(tmp_path):
+    """同一句含 I/yesterday 的话不可跨人物或日期复用首次提取。"""
+    from ananke.extraction import extract_memories
+
+    llm = CountingLLM('["Caroline attended an event on 7 May 2023"]')
+    llm.cache = LLMCache(tmp_path / "cache", model_tag="test|m", enabled=True)
+
+    extract_memories(
+        "I attended an event yesterday",
+        llm,
+        speaker="Caroline",
+        session_datetime="8 May 2023",
+    )
+    extract_memories(
+        "I attended an event yesterday",
+        llm,
+        speaker="Caroline",
+        session_datetime="8 May 2023",
+    )
+    assert llm.calls == 1
+
+    extract_memories(
+        "I attended an event yesterday",
+        llm,
+        speaker="Melanie",
+        session_datetime="8 May 2023",
+    )
+    extract_memories(
+        "I attended an event yesterday",
+        llm,
+        speaker="Caroline",
+        session_datetime="9 May 2023",
+    )
+    assert llm.calls == 3
+
+
 def test_pairs_cache_hit_skips_llm(tmp_path):
     """分类对缓存：同 (new, existing) 句对第二次命中，不调 LLM。"""
     from ananke.relation import LLMRelationClassifier

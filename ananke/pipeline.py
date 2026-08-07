@@ -66,12 +66,14 @@ class MemoryPipeline:
         *,
         dia_id: Optional[str] = None,
         speaker: Optional[str] = None,
+        session_datetime: Optional[str] = None,
         system_guided: bool = False,
     ) -> Dict[str, List]:
         with self.event_logger.context(
             input_session_id=session_id,
             input_dia_id=dia_id,
             input_speaker=speaker,
+            input_session_datetime=session_datetime,
             system_guided=system_guided,
         ):
             snapshot = self.memory_store.snapshot()
@@ -83,6 +85,7 @@ class MemoryPipeline:
                             session_id,
                             dia_id,
                             speaker,
+                            session_datetime,
                             system_guided,
                         )
             except Exception as error:
@@ -111,6 +114,7 @@ class MemoryPipeline:
         session_id: Optional[str],
         dia_id: Optional[str],
         speaker: Optional[str],
+        session_datetime: Optional[str],
         system_guided: bool,
     ) -> Dict[str, List]:
         written: List[MemoryEntry] = []
@@ -124,11 +128,18 @@ class MemoryPipeline:
             [self.embedding_engine.encode(m.content)[0] for m in existing_cache] if existing_cache else []
         )
 
-        for content in extract_memories(user_input, self.llm_client):
+        for content in extract_memories(
+            user_input,
+            self.llm_client,
+            speaker=speaker,
+            session_datetime=session_datetime,
+        ):
             candidate, best_sim = self._recall(content, existing_cache, existing_vecs)
             if candidate is None:
                 # 无候选（余弦召回空集）→ 视为 unrelated，直接写入快层。
-                memory = self._write(content, session_id, dia_id, speaker)
+                memory = self._write(
+                    content, session_id, dia_id, speaker, session_datetime
+                )
                 written.append(memory)
                 existing_cache.append(memory)
                 existing_vecs.append(self.embedding_engine.encode(content)[0])
@@ -153,7 +164,9 @@ class MemoryPipeline:
                 content, candidate, relation, best_sim, session_id, system_guided
             )
             if write_new:
-                memory = self._write(content, session_id, dia_id, speaker)
+                memory = self._write(
+                    content, session_id, dia_id, speaker, session_datetime
+                )
                 written.append(memory)
                 existing_cache.append(memory)
                 existing_vecs.append(self.embedding_engine.encode(content)[0])
@@ -318,6 +331,7 @@ class MemoryPipeline:
         session_id: Optional[str],
         dia_id: Optional[str],
         speaker: Optional[str],
+        session_datetime: Optional[str],
     ) -> MemoryEntry:
         memory = MemoryEntry(
             id=str(uuid4()),
@@ -325,6 +339,7 @@ class MemoryPipeline:
             source_session_id=session_id,
             source_dia_id=dia_id,
             source_speaker=speaker,
+            source_session_datetime=session_datetime,
         )
         self.memory_store.add(memory)
         self.event_logger.log(
@@ -335,6 +350,7 @@ class MemoryPipeline:
             source_session_id=memory.source_session_id,
             source_dia_id=memory.source_dia_id,
             source_speaker=memory.source_speaker,
+            source_session_datetime=memory.source_session_datetime,
         )
         return memory
 

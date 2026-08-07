@@ -11,6 +11,10 @@ _SYSTEM_PROMPT = (
     "You are a memory extractor. Extract short, atomic facts worth remembering long-term "
     "from the user's input. Output language MUST match the input language "
     "(if input is English, output English; if Chinese, output Chinese). "
+    "When source context is provided, use the speaker's name as the subject instead of generic "
+    "labels such as 'user', and resolve relative time expressions from the session date/time when "
+    "the result is unambiguous. Never invent a person, date, or fact that is absent from the input "
+    "and source context. "
     "Output only a JSON array of strings, e.g. [\"User likes badminton\"] or [\"用户喜欢羽毛球\"]. "
     "Do not output any explanation, extra text, or code fences. If nothing is worth remembering, output []."
 )
@@ -20,17 +24,66 @@ _SYSTEM_PROMPT = (
 EXTRACTION_USER_PREFIX = (
     "Extract short, atomic facts worth remembering long-term from the input below. "
     "Output language must match the input language. Output only a JSON array of strings; "
-    "if none, output [].\nUser input: "
+    "if none, output [].\n"
+)
+EXTRACTION_CONTEXT_TEMPLATE = (
+    "Source speaker: {speaker}\n"
+    "Session date/time: {session_datetime}\n"
+    "User input: {user_input}"
 )
 # 完整模板（system + 用户前缀），供 llm_client 构造缓存时算 SHA1。改此模板即全量失效。
-EXTRACTION_PROMPT_TEMPLATE = _SYSTEM_PROMPT + EXTRACTION_USER_PREFIX
+EXTRACTION_PROMPT_TEMPLATE = (
+    _SYSTEM_PROMPT + EXTRACTION_USER_PREFIX + EXTRACTION_CONTEXT_TEMPLATE
+)
 
 
-def extract_memories(user_input: str, llm_client) -> List[str]:
-    prompt = EXTRACTION_USER_PREFIX + user_input
+def _source_context_key(
+    user_input: str,
+    speaker: Optional[str],
+    session_datetime: Optional[str],
+) -> str:
+    """Return the cache identity for one utterance plus its semantic source context."""
+    return normalize(
+        EXTRACTION_CONTEXT_TEMPLATE.format(
+            speaker=speaker or "",
+            session_datetime=session_datetime or "",
+            user_input=user_input,
+        )
+    )
+
+
+def _source_context_prompt(
+    user_input: str,
+    speaker: Optional[str],
+    session_datetime: Optional[str],
+) -> str:
+    """Render only the context fields that are actually known."""
+    lines = []
+    if speaker:
+        lines.append(f"Source speaker: {speaker}")
+    if session_datetime:
+        lines.append(f"Session date/time: {session_datetime}")
+    lines.append(f"User input: {user_input}")
+    return "\n".join(lines)
+
+
+def extract_memories(
+    user_input: str,
+    llm_client,
+    *,
+    speaker: Optional[str] = None,
+    session_datetime: Optional[str] = None,
+) -> List[str]:
+    prompt = EXTRACTION_USER_PREFIX + _source_context_prompt(
+        user_input,
+        speaker,
+        session_datetime,
+    )
     # 两级缓存（提取层）：同输入永远返回首次提取结果 → 重跑/换策略零 API、且给 D 去噪。
     cache = getattr(llm_client, "cache", None)
-    norm = normalize(user_input)
+    # 同一句话由不同人物说出、或出现在不同日期时，可能代表不同事实（尤其含 I / yesterday）。
+    # 缓存键必须包含上下文，否则旧的首次提取结果会跨人物/日期复用并制造假 duplicate/EV。
+    norm = _source_context_key(user_input, speaker, session_datetime)
     cached = cache.get("extraction", norm) if cache else None
     if cached is not None:
         # 命中：缓存的是规范 JSON 列表字符串（C1），直接解析返回。

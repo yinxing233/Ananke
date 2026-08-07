@@ -50,10 +50,11 @@ class CorpusTurn:
     session_id: str | None
     dia_id: str | None = None
     speaker: str | None = None
+    session_datetime: str | None = None
 
 
 def load_corpus(path: Path) -> list[CorpusTurn]:
-    """加载语料，保留每轮 input/session/dia/speaker 来源。
+    """加载语料，保留每轮 input/session/dia/speaker/date 来源。
 
     支持三种格式：
     - .jsonl 每行含 {session_id, input}（或 {session/text/user/content}）。
@@ -80,6 +81,11 @@ def load_corpus(path: Path) -> list[CorpusTurn]:
                         session_id=sid,
                         dia_id=obj.get("dia_id"),
                         speaker=obj.get("speaker"),
+                        session_datetime=(
+                            obj.get("session_datetime")
+                            or obj.get("session_date_time")
+                            or obj.get("date_time")
+                        ),
                     )
                 )
     else:
@@ -180,6 +186,7 @@ def main() -> None:
             session_id=turn.session_id,
             dia_id=turn.dia_id,
             speaker=turn.speaker,
+            session_datetime=turn.session_datetime,
         )
         n_write = len(result["written"])
         n_consol = len(result["consolidated"])

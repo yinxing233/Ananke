@@ -33,6 +33,7 @@ class MemoryEntry(BaseModel):
     )
     source_dia_id: Optional[str] = None
     source_speaker: Optional[str] = None
+    source_session_datetime: Optional[str] = None
     source_ids: List[str] = Field(default_factory=list)
     tags: List[str] = Field(default_factory=list)
 

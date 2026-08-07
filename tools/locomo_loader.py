@@ -5,7 +5,7 @@ LoCoMo（snap-research/LoCoMo, ACL 2024）：每对话含多 session（跨数月
 {speaker, dia_id, text}，外加 qa（question/answer/category/evidence）。本适配器把一个对话
 转成 Ananke 可喂的格式：
 
-  - 语料 .jsonl：每行 {session_id, input, dia_id, speaker}。**两个 speaker 的轮次都喂**
+  - 语料 .jsonl：每行 {session_id, input, dia_id, speaker, session_datetime}。**两个 speaker 的轮次都喂**
     （见下方「双 speaker 裁决」）。session_id = f"{sample_id}_s{n}"，使「跨 session 再断言
     同一事实」= EV（§3：session 边界 = 话语状态重置 = 去相关事件；与哪个 speaker 无关）。
   - 探针 .jsonl：每行 {question, fact, category}（fact=answer）。供 tools/evaluate.py 独立评判端。
@@ -61,7 +61,7 @@ def _ordered_sessions(conv: dict) -> list[tuple[int, list[dict]]]:
 def convert_sample(sample: dict) -> tuple[list[dict], list[dict], dict]:
     """把一个 LoCoMo 对话转成 (corpus_rows, probe_rows, evidence_stat)。
 
-    corpus_rows: [{session_id, input, dia_id, speaker}, ...] **两个 speaker 的轮次都喂**。
+    corpus_rows: [{session_id, input, dia_id, speaker, session_datetime}, ...] **两个 speaker 的轮次都喂**。
     probe_rows:  [{question, fact, category}, ...] 每个 qa 一条（fact=answer）。
     evidence_stat: 探针 evidence 的 speaker 分布（only_a/only_b/both/none）。
     """
@@ -75,15 +75,36 @@ def convert_sample(sample: dict) -> tuple[list[dict], list[dict], dict]:
     corpus: list[dict] = []
     for n, turns in sessions:
         session_id = f"{sid}_s{n}"
+        session_datetime = str(
+            conv.get(f"session_{n}_date_time") or ""
+        ).strip()
+        if not session_datetime:
+            raise ValueError(
+                f"{sid} session_{n} 缺少 session_{n}_date_time；"
+                "相对时间无法可靠解析，拒绝生成实验语料"
+            )
         for tu in turns:
             did = tu.get("dia_id", "")
             spk = tu.get("speaker", "")
+            if not spk:
+                raise ValueError(
+                    f"{sid} session_{n} dia_id={did or '(missing)'} 缺少 speaker；"
+                    "第一人称事实无法可靠归属，拒绝生成实验语料"
+                )
             if did:
                 dia2speaker[did] = spk
             text = (tu.get("text") or "").strip()
             if not text:
                 continue
-            corpus.append({"session_id": session_id, "input": text, "dia_id": did, "speaker": spk})
+            corpus.append(
+                {
+                    "session_id": session_id,
+                    "session_datetime": session_datetime,
+                    "input": text,
+                    "dia_id": did,
+                    "speaker": spk,
+                }
+            )
 
     probes: list[dict] = []
     ev_stat = {"total": 0, "with_evidence": 0, "only_a": 0, "only_b": 0, "both": 0, "none": 0, "unmatched": 0}

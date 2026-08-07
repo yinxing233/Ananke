@@ -8,7 +8,7 @@
    B1–B7 冻结裁决集；
 4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
 
-裁决集已经冻结且 B1–B7 已实现（`70 passed`），但协议 v4 **尚未正式冻结**，当前数据只属探索阶段。冻结历史协议 v3 与初版
+裁决集已经冻结且 B1–B7 已实现；2026-08-02 加入 LoCoMo 来源上下文保真修复后为 `73 passed`，但协议 v4 **尚未正式冻结**，当前数据只属探索阶段。冻结历史协议 v3 与初版
 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
 不作为本轮代码修改依据。
 
@@ -49,7 +49,7 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 
 - pre-audit 代码包含三层 JSONL、召回—五分类、P/F 策略、缓存和事件日志；
 - 2026-07-28 基线测试为 43/43；
-- 2026-07-30 B1–B7 实现后为 70/70；
+- 2026-07-30 B1–B7 实现后为 70/70；2026-08-02 来源上下文保真修复后为 73/73；
 - 已闭合评估解析、轮级原子性、distinct-session EV、来源元数据和 CORE 召回；
 - `system_guided` 是未启用接口，v0.2 runner 中恒为 False；
 - 当前旧 253 轮没有可用 LLM 缓存，不能作为续跑检查点；

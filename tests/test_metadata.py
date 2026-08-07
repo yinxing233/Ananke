@@ -8,6 +8,7 @@ from ananke.logger import EventLogger
 from ananke.memory_store import MemoryStore
 from ananke.pipeline import MemoryPipeline
 from ananke.relation import MockRelationClassifier, REL_UNRELATED
+from tools.locomo_loader import convert_sample
 from tools.run_corpus import load_corpus
 
 
@@ -24,7 +25,11 @@ class _Embedding:
 class _ExtractionLLM:
     cache = None
 
+    def __init__(self):
+        self.prompts = []
+
     def call_llm(self, prompt, system_prompt=None, temperature=None):
+        self.prompts.append(prompt)
         return '["new fact"]'
 
 
@@ -46,7 +51,7 @@ def _records(path):
     ]
 
 
-def test_a4_jsonl_loader_preserves_session_dia_and_speaker(tmp_path):
+def test_a4_jsonl_loader_preserves_session_dia_speaker_and_datetime(tmp_path):
     corpus = tmp_path / "corpus.jsonl"
     corpus.write_text(
         json.dumps(
@@ -55,6 +60,7 @@ def test_a4_jsonl_loader_preserves_session_dia_and_speaker(tmp_path):
                 "input": "A fact",
                 "dia_id": "D17",
                 "speaker": "Caroline",
+                "session_datetime": "1:56 pm on 8 May, 2023",
             }
         )
         + "\n",
@@ -67,6 +73,60 @@ def test_a4_jsonl_loader_preserves_session_dia_and_speaker(tmp_path):
     assert turn.session_id == "conv-41_s3"
     assert turn.dia_id == "D17"
     assert turn.speaker == "Caroline"
+    assert turn.session_datetime == "1:56 pm on 8 May, 2023"
+
+
+def test_locomo_adapter_copies_session_datetime_to_every_turn():
+    sample = {
+        "sample_id": "conv-test",
+        "conversation": {
+            "speaker_a": "Caroline",
+            "speaker_b": "Melanie",
+            "session_1_date_time": "1:56 pm on 8 May, 2023",
+            "session_1": [
+                {
+                    "speaker": "Caroline",
+                    "dia_id": "D1:1",
+                    "text": "I went to a support group yesterday.",
+                },
+                {
+                    "speaker": "Melanie",
+                    "dia_id": "D1:2",
+                    "text": "That sounds powerful.",
+                },
+            ],
+        },
+        "qa": [],
+    }
+
+    corpus, probes, _ = convert_sample(sample)
+
+    assert probes == []
+    assert [turn["speaker"] for turn in corpus] == ["Caroline", "Melanie"]
+    assert {turn["session_datetime"] for turn in corpus} == {
+        "1:56 pm on 8 May, 2023"
+    }
+
+
+def test_locomo_adapter_rejects_missing_session_datetime():
+    sample = {
+        "sample_id": "conv-test",
+        "conversation": {
+            "speaker_a": "Caroline",
+            "speaker_b": "Melanie",
+            "session_1": [
+                {"speaker": "Caroline", "dia_id": "D1:1", "text": "I went yesterday."}
+            ],
+        },
+        "qa": [],
+    }
+
+    try:
+        convert_sample(sample)
+    except ValueError as error:
+        assert "缺少 session_1_date_time" in str(error)
+    else:
+        raise AssertionError("LoCoMo session 缺日期时应 fail closed")
 
 
 def test_a4_source_metadata_persists_and_input_metadata_reaches_all_events(tmp_path):
@@ -77,17 +137,20 @@ def test_a4_source_metadata_persists_and_input_metadata_reaches_all_events(tmp_p
         session_id="conv-41_s3",
         dia_id="D17",
         speaker="Caroline",
+        session_datetime="1:56 pm on 8 May, 2023",
     )
 
     memory = result["written"][0]
     assert memory.source_session_id == "conv-41_s3"
     assert memory.source_dia_id == "D17"
     assert memory.source_speaker == "Caroline"
+    assert memory.source_session_datetime == "1:56 pm on 8 May, 2023"
 
     reloaded = MemoryStore(tmp_path / "data").find(memory.id)
     assert reloaded.source_session_id == "conv-41_s3"
     assert reloaded.source_dia_id == "D17"
     assert reloaded.source_speaker == "Caroline"
+    assert reloaded.source_session_datetime == "1:56 pm on 8 May, 2023"
 
     records = _records(tmp_path / "events.jsonl")
     assert records
@@ -95,35 +158,23 @@ def test_a4_source_metadata_persists_and_input_metadata_reaches_all_events(tmp_p
         assert record["input_session_id"] == "conv-41_s3"
         assert record["input_dia_id"] == "D17"
         assert record["input_speaker"] == "Caroline"
+        assert record["input_session_datetime"] == "1:56 pm on 8 May, 2023"
         assert record["system_guided"] is False
 
 
-def test_metadata_dia_and_speaker_are_dynamically_inert(tmp_path):
-    left = _make_pipeline(tmp_path / "left")
-    right = _make_pipeline(tmp_path / "right")
+def test_speaker_and_datetime_reach_extractor_but_dia_id_stays_audit_only(tmp_path):
+    pipeline = _make_pipeline(tmp_path)
 
-    left_result = left.process(
-        "input",
-        session_id="same-session",
-        dia_id="left-dia",
-        speaker="left-speaker",
-    )
-    right_result = right.process(
-        "input",
-        session_id="same-session",
-        dia_id="right-dia",
-        speaker="right-speaker",
+    pipeline.process(
+        "I went to a support group yesterday.",
+        session_id="conv-41_s3",
+        dia_id="D17",
+        speaker="Caroline",
+        session_datetime="1:56 pm on 8 May, 2023",
     )
 
-    left_memory = left_result["written"][0]
-    right_memory = right_result["written"][0]
-    assert left_memory.content == right_memory.content
-    assert left_memory.layer == right_memory.layer
-    assert left_memory.persistence_score == right_memory.persistence_score
-    assert left_memory.frequency_score == right_memory.frequency_score
-    assert left_memory.internal_activation == right_memory.internal_activation
-    assert left_memory.external_validation == right_memory.external_validation
-
-    left_events = [record["event"] for record in _records(tmp_path / "left" / "events.jsonl")]
-    right_events = [record["event"] for record in _records(tmp_path / "right" / "events.jsonl")]
-    assert left_events == right_events
+    prompt = pipeline.llm_client.prompts[0]
+    assert "Source speaker: Caroline" in prompt
+    assert "Session date/time: 1:56 pm on 8 May, 2023" in prompt
+    assert "User input: I went to a support group yesterday." in prompt
+    assert "D17" not in prompt
