@@ -12,7 +12,7 @@
     因此评判端必须是不同家族 LLM，且**禁止出现嵌入模型**。
 
 证据命中率（evidence hit rate）定义：
-    对每个记忆 M，取其在所有探针问题上判定的最大值（包含=1.0 / 部分=EVAL_PARTIAL_CREDIT / 不包含=0）。
+    对每个记忆 M，取其在所有探针问题上判定的最大值（包含=1.0 / 部分=0.5 / 不包含=0）。
     某记忆「被证据命中」 ⇔ 其最大命中 > 0（至少部分包含某外部问题答案所需事实）。
     证据命中率 = 被命中记忆数 / 有有效 judge 判定的记忆数；全失败记忆标记 unscored，
     仍保留在 P/F 升层集合但退出命中率分母。
@@ -44,11 +44,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ananke.config import Config
 from ananke.llm_client import create_eval_llm_client
 from ananke.memory_store import MemoryStore
 
-_LABEL_SCORE = {"包含": 1.0, "部分": Config.EVAL_PARTIAL_CREDIT, "不包含": 0.0}
+# B6 protocol constant: this is deliberately not configurable at runtime.
+PARTIAL_CREDIT = 0.5
+VERDICT_MAX_TOKENS = 6
+_LABEL_SCORE = {"包含": 1.0, "部分": PARTIAL_CREDIT, "不包含": 0.0}
 _VERDICT_PATTERN = re.compile(r"不包含|部分|包含")
 
 
@@ -106,7 +108,11 @@ def judge_single(
         f"仅回复以下之一，不要解释：包含 / 部分 / 不包含"
     )
     try:
-        reply = judge.call_llm(prompt)
+        reply = judge.call_llm(
+            prompt,
+            max_tokens=VERDICT_MAX_TOKENS,
+            operation="evaluation",
+        )
         return parse_verdict(reply)
     except Exception as e:  # 单条失败剔除并计数，不折算为不命中
         print(f"    [warn] 评判失败: {e}")
@@ -170,6 +176,11 @@ def main() -> None:
     ap.add_argument("--tag", default="eval", help="输出文件标签")
     ap.add_argument("--out", default="logs", help="JSON 结果输出目录")
     ap.add_argument(
+        "--usage-log",
+        default=None,
+        help="实际 judge HTTP 请求/Token JSONL；默认 logs/eval_<tag>_llm_usage.jsonl",
+    )
+    ap.add_argument(
         "--allow-mock",
         action="store_true",
         help="仅冒烟：显式允许 MockEvaluationJudge；正式评估禁止使用",
@@ -186,7 +197,13 @@ def main() -> None:
         return
 
     try:
-        judge = create_eval_llm_client(allow_mock=args.allow_mock)
+        usage_log = args.usage_log or str(
+            Path(args.out) / f"eval_{args.tag}_llm_usage.jsonl"
+        )
+        judge = create_eval_llm_client(
+            allow_mock=args.allow_mock,
+            usage_log=usage_log,
+        )
     except RuntimeError as error:
         print(f"[abort] {error}")
         raise SystemExit(2) from error
@@ -226,11 +243,20 @@ def main() -> None:
     path = out / f"eval_{args.tag}.json"
     payload = {
         "strategy": args.strategy,
-        "partial_credit": Config.EVAL_PARTIAL_CREDIT,
+        "partial_credit": PARTIAL_CREDIT,
         **report,
     }
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[ok] 机读结果 → {path}")
+    usage_stats = getattr(judge, "usage_stats", None)
+    if callable(usage_stats):
+        usage = usage_stats()
+        print(
+            f"[api] HTTP请求={usage['http_requests']} | 成功={usage['successes']} | "
+            f"429={usage['rate_limited']} | 错误={usage['errors']} | "
+            f"input_tokens={usage['prompt_tokens']} | output_tokens={usage['completion_tokens']} | "
+            f"usage缺失={usage['successful_requests_without_usage']} | 日志={usage['log_path']}"
+        )
     if not report["evaluation_valid"]:
         print("[abort] judge_failure_rate > 5%，本次评估无效。")
         raise SystemExit(2)

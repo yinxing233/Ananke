@@ -96,7 +96,10 @@ def extract_memories(
     for _ in range(3):
         try:
             response = llm_client.call_llm(
-                prompt, system_prompt=_SYSTEM_PROMPT, temperature=0.0
+                prompt,
+                system_prompt=_SYSTEM_PROMPT,
+                temperature=0.0,
+                operation="extraction",
             ).strip()
             try:
                 items = json.loads(response)

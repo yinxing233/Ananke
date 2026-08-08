@@ -27,7 +27,7 @@ class _ExtractionLLM:
     def __init__(self, count):
         self.count = count
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         if self.count <= 0:
             return "[]"
         self.count -= 1

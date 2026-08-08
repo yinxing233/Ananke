@@ -33,7 +33,7 @@ class _ExtractionLLM:
     def __init__(self, content):
         self.content = content
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         return json.dumps([self.content])
 
 

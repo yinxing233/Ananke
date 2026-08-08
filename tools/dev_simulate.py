@@ -5,9 +5,15 @@
 + 确定性 MockRelationClassifier + MockEmbedding（不下载模型、不联网）。
 写入隔离路径 logs/dev_events.jsonl + data/dev/，不污染真实数据。
 
-覆盖的事件类型：memory_write / external_validation(跨 session) / memory_dedup_skip /
-local_reorganization(merge+conflict) / working_to_consolidated / consolidated_to_core /
-conflict_link / core_promotion_blocked。
+覆盖的事件类型：memory_write / rule_based_duplicate(8-08 exact-dup 短路) /
+external_validation(跨 session) / memory_dedup_skip / local_reorganization(merge+conflict) /
+working_to_consolidated / consolidated_to_core / conflict_link / core_promotion_blocked。
+
+2026-08-08 适配：s2–s4 / s7–s9 的 dup 步骤提取内容与既有记忆**归一化完全相等**，
+按协议走确定性 rule_based_duplicate（短路，不调用关系分类器），因此 script 队列只包含
+实际会调用分类器的 4 个标签（merge×2 + contradict×2），与步骤消耗顺序严格对齐。
+main() 末尾有守护断言：缺失 consolidated_to_core / conflict_link / core_promotion_blocked
+任一即非零退出，防止协议变更后演示链再次静默断裂。
 
 用法：
     uv run python tools/dev_simulate.py
@@ -75,7 +81,7 @@ class ScriptedExtractionLLM(BaseLLMClient):
     def __init__(self, extractions):
         self.extractions = list(extractions)
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         if "extract" in prompt.lower():
             return json.dumps(self.extractions.pop(0), ensure_ascii=False) if self.extractions else "[]"
         return "[]"
@@ -87,18 +93,26 @@ class ScriptedExtractionLLM(BaseLLMClient):
 #   X  = mornings：dup×3 → EV=3 升巩固层 → 两次 contradict → conflict=1,2 → 被阻断留在中层
 #                    (core_promotion_blocked)，同时新断言(evenings/nights)落盘并与 X 双向链接
 #   C/tea = 无关写入
+#
+# ⚠️ 2026-08-08 exact-dup 适配（重要）：
+#   s2–s4 / s7–s9 的提取内容与既有记忆逐字相同（如 "user likes badminton" 与 s1 相同），
+#   按协议 v4 §2.2 的 normalized exact duplicate 规则**确定性短路**为 duplicate
+#   （rule_based_duplicate 事件），不消耗下方 script 队列。因此 script 只列 merge/contradict
+#   步骤的实际标签；若未来协议再改短路规则，必须同步本文件并保证守护断言通过。
 STEPS = [
     ("s1", "write badminton", ["user likes badminton"], None),          # 写入 B（working）
     ("s1", "write coffee", ["user likes coffee"], None),                # 写入 C（working）
-    ("s2", "dup badminton", ["user likes badminton"], REL_DUPLICATE),   # B.EV=1
-    ("s3", "dup badminton", ["user likes badminton"], REL_DUPLICATE),   # B.EV=2
-    ("s4", "dup badminton", ["user likes badminton"], REL_DUPLICATE),   # B.EV=3 → 升巩固层
+    # dup×3：逐字重复 → 走 rule_based_duplicate（8-08 协议），B.EV=1/2/3 → 升巩固层
+    ("s2", "dup badminton", ["user likes badminton"], None),
+    ("s3", "dup badminton", ["user likes badminton"], None),
+    ("s4", "dup badminton", ["user likes badminton"], None),
     ("s5", "merge badminton1", ["user plays badminton"], REL_MERGEABLE),# B.trigger=1
     ("s5", "merge badminton2", ["user enjoys badminton"], REL_MERGEABLE), # B.trigger=2 → 升慢层(core)
     ("s6", "write X mornings", ["user prefers mornings"], None),        # 写入 X（working）
-    ("s7", "dup X", ["user prefers mornings"], REL_DUPLICATE),          # X.EV=1
-    ("s8", "dup X", ["user prefers mornings"], REL_DUPLICATE),          # X.EV=2
-    ("s9", "dup X", ["user prefers mornings"], REL_DUPLICATE),          # X.EV=3 → 升巩固层
+    # dup×3：逐字重复 → 走 rule_based_duplicate，X.EV=1/2/3 → 升巩固层
+    ("s7", "dup X", ["user prefers mornings"], None),
+    ("s8", "dup X", ["user prefers mornings"], None),
+    ("s9", "dup X", ["user prefers mornings"], None),
     ("s10", "conflict X evenings", ["user prefers evenings"], REL_CONTRADICT), # X.conflict=1 → 阻断 + 新断言写入 + 链接
     ("s11", "conflict X nights", ["user prefers nights"], REL_CONTRADICT),     # X.conflict=2 仍阻断
     ("s12", "unrelated tea", ["user likes tea"], None),                 # 无关写入
@@ -137,6 +151,16 @@ def main() -> None:
 
     records = [json.loads(line) for line in dev_log.open(encoding="utf-8")]
     kinds = sorted({r["event"] for r in records})
+    # 守护断言（2026-08-08 修复）：演示链必须覆盖三类关键事件，否则说明 STEPS/script
+    # 与协议（exact-dup 短路规则）再次脱节，非零退出，杜绝静默断裂。
+    required = {"consolidated_to_core", "conflict_link", "core_promotion_blocked"}
+    missing = required - set(kinds)
+    if missing:
+        raise SystemExit(
+            f"[abort] dev_simulate 演示链断裂：缺少事件 {sorted(missing)}。\n"
+            "  请检查 STEPS 与 MockRelationClassifier script 队列是否与 2026-08-08\n"
+            "  normalized exact duplicate 短路规则对齐（dup 步骤不消耗分类器队列）。"
+        )
     print(f"[ok] v4 合成 {len(STEPS)} 轮 (strategy={Config.WORKING_PROMOTION_STRATEGY}) → {dev_log} ({len(records)} 条事件)")
     print(f"     事件类型: {', '.join(kinds)}")
     print(f"     下一步: uv run python tools/analyze_trajectory.py --log {dev_log} --data {dev_data}")

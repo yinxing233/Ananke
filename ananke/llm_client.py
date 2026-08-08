@@ -19,9 +19,12 @@ from __future__ import annotations
 import threading
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from ananke.config import Config
+from ananke.usage import RequestUsageMeter
 
 
 class _RateLimiter:
@@ -72,7 +75,15 @@ class BaseLLMClient(ABC):
     """所有 LLM 后端必须实现的接口。pipeline / extraction / reorganization 只依赖它。"""
 
     @abstractmethod
-    def call_llm(self, prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> str:
+    def call_llm(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        *,
+        max_tokens: Optional[int] = None,
+        operation: str = "unspecified",
+    ) -> str:
         """返回模型文本回复。system_prompt 与 temperature 为可选覆盖。"""
         raise NotImplementedError
 
@@ -80,7 +91,15 @@ class BaseLLMClient(ABC):
 class MockLLMClient(BaseLLMClient):
     """离线调试用：根据 prompt 关键词返回确定性结果，方便跑通迁移/激活/重组逻辑。"""
 
-    def call_llm(self, prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> str:
+    def call_llm(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        *,
+        max_tokens: Optional[int] = None,
+        operation: str = "unspecified",
+    ) -> str:
         # 针对记忆提取
         if "提取" in prompt or "extract" in prompt.lower():
             return '["用户喜欢打羽毛球", "用户养了一只猫"]'
@@ -113,16 +132,27 @@ class OpenAICompatibleClient(BaseLLMClient):
         temperature: Optional[float] = None,
         rpm: Optional[int] = None,
         cache=None,
+        provider: Optional[str] = None,
+        role: str = "driver",
+        usage_log: str | Path | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else Config.LLM_API_KEY
         self.base_url = base_url if base_url is not None else Config.LLM_BASE_URL
         self.model = model if model is not None else Config.LLM_MODEL
         self.temperature = temperature if temperature is not None else Config.LLM_TEMPERATURE
+        self.provider = provider if provider is not None else Config.LLM_PROVIDER
+        self.role = role
         # RPM 节流（I/O 韧性）：未显式传 rpm 时用 Config.LLM_RPM（驱动端默认 30）。
         # 评判端传 rpm=Config.EVAL_LLM_RPM（默认 0=不限，因默认 deepseek）。
         self._limiter = _RateLimiter(rpm if rpm is not None else Config.LLM_RPM)
         # 两级缓存（提取/分类对，协议 v4 §8）：None=不缓存（评判端/测试）。
         self.cache = cache
+        self._usage_meter = RequestUsageMeter(
+            usage_log,
+            role=role,
+            provider=self.provider,
+            model=self.model,
+        )
         # 延迟导入，避免未安装 openai 时影响 mock 模式 / 测试。
         from openai import OpenAI
 
@@ -131,9 +161,23 @@ class OpenAICompatibleClient(BaseLLMClient):
                 "未配置 LLM_API_KEY。请在项目根目录的 .env 中设置 LLM_API_KEY，"
                 "或把 USE_MOCK_LLM 设为 true 使用 Mock LLM。"
             )
-        self._client = OpenAI(api_key=self.api_key, base_url=self.base_url or None)
+        # SDK 默认会在内部自动重试 429/部分传输错误，外层计量无法看见那些 HTTP 尝试。
+        # 关闭隐式重试，让每次 provider 请求都只经下方显式、可审计的重试循环。
+        self._client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url or None,
+            max_retries=0,
+        )
 
-    def call_llm(self, prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> str:
+    def call_llm(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        *,
+        max_tokens: Optional[int] = None,
+        operation: str = "unspecified",
+    ) -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -142,27 +186,76 @@ class OpenAICompatibleClient(BaseLLMClient):
         # 保证任意长度语料都能跑完。仅 I/O 韧性，不影响任何理论行为。
         from openai import RateLimitError
 
-        self._limiter.acquire()  # 预防性 RPM 节流（纯 I/O 韧性，不影响理论行为）
         delay = 8.0
         last_err: Optional[Exception] = None
+        call_id = str(uuid4())
         for attempt in range(6):
+            # 每次真实 HTTP 尝试都过节流器；429 重试同样计入实际请求与 RPM。
+            self._limiter.acquire()
+            started = time.perf_counter()
+            request = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature if temperature is None else temperature,
+            }
+            if max_tokens is not None:
+                request["max_tokens"] = max_tokens
             try:
-                response = self._client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=self.temperature if temperature is None else temperature,
+                response = self._client.chat.completions.create(**request)
+                content = (response.choices[0].message.content or "").strip()
+                self._usage_meter.record(
+                    call_id=call_id,
+                    operation=operation,
+                    attempt=attempt + 1,
+                    status="success",
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    completion=content,
+                    usage=getattr(response, "usage", None),
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                    max_tokens=max_tokens,
                 )
-                return (response.choices[0].message.content or "").strip()
+                return content
             except RateLimitError as e:
                 last_err = e
+                self._usage_meter.record(
+                    call_id=call_id,
+                    operation=operation,
+                    attempt=attempt + 1,
+                    status="rate_limited",
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    error=e,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                    max_tokens=max_tokens,
+                )
                 wait = min(delay * (2 ** attempt), 60.0)
                 print(f"[warn] LLM 限流(429)，{wait:.0f}s 后重试 ({attempt + 1}/6)…")
                 time.sleep(wait)
+            except Exception as e:
+                self._usage_meter.record(
+                    call_id=call_id,
+                    operation=operation,
+                    attempt=attempt + 1,
+                    status="error",
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    error=e,
+                    duration_ms=(time.perf_counter() - started) * 1000,
+                    max_tokens=max_tokens,
+                )
+                raise
         assert last_err is not None
         raise last_err
 
+    def usage_stats(self) -> dict:
+        return self._usage_meter.stats()
 
-def create_llm_client() -> BaseLLMClient:
+
+def create_llm_client(
+    *,
+    usage_log: str | Path | None = None,
+) -> BaseLLMClient:
     """按 Config 选择后端。run.py 直接调用它，无需关心具体实现。"""
     if Config.USE_MOCK_LLM:
         return MockLLMClient()
@@ -198,7 +291,13 @@ def create_llm_client() -> BaseLLMClient:
                 },
                 enabled=True,
             )
-        return OpenAICompatibleClient(base_url=base_url, cache=cache)
+        return OpenAICompatibleClient(
+            base_url=base_url,
+            cache=cache,
+            provider=Config.LLM_PROVIDER,
+            role="driver",
+            usage_log=usage_log,
+        )
     raise ValueError(
         f"不支持的 LLM_PROVIDER={Config.LLM_PROVIDER!r}。"
         f"可选：{', '.join(sorted(_OPENAI_COMPATIBLE))}；"
@@ -206,7 +305,75 @@ def create_llm_client() -> BaseLLMClient:
     )
 
 
-def create_eval_llm_client(*, allow_mock: bool = False) -> BaseLLMClient:
+_GENERIC_PROVIDERS = {
+    "openai-compatible",
+    "openrouter",
+    "groq",
+    "ollama",
+}
+
+_FAMILY_ALIASES = {
+    "gemini": ("gemini", "google"),
+    "deepseek": ("deepseek",),
+    "glm": ("glm", "zhipu", "chatglm"),
+    "qwen": ("qwen", "alibaba", "dashscope"),
+    "openai": ("gpt", "openai", "o1", "o3", "o4"),
+    "anthropic": ("claude", "anthropic"),
+    "llama": ("llama", "meta-llama"),
+    "mistral": ("mistral", "mixtral"),
+    "grok": ("grok", "xai"),
+}
+
+
+def _model_family(
+    provider: str,
+    model: str,
+    explicit_family: str = "",
+) -> str | None:
+    if explicit_family.strip():
+        return explicit_family.strip().lower()
+    model_text = model.strip().lower()
+    for family, aliases in _FAMILY_ALIASES.items():
+        if any(alias in model_text for alias in aliases):
+            return family
+    provider_text = provider.strip().lower()
+    if provider_text not in _GENERIC_PROVIDERS:
+        for family, aliases in _FAMILY_ALIASES.items():
+            if provider_text == family or provider_text in aliases:
+                return family
+    return None
+
+
+def assert_model_family_separation(
+    *,
+    driver_provider: str,
+    driver_model: str,
+    judge_provider: str,
+    judge_model: str,
+    driver_family: str = "",
+    judge_family: str = "",
+) -> tuple[str, str]:
+    """Fail closed unless driving and judge model families are both known and different."""
+    resolved_driver = _model_family(driver_provider, driver_model, driver_family)
+    resolved_judge = _model_family(judge_provider, judge_model, judge_family)
+    if resolved_driver is None or resolved_judge is None:
+        raise RuntimeError(
+            "cannot determine model family; set LLM_FAMILY and EVAL_LLM_FAMILY "
+            "explicitly before formal evaluation"
+        )
+    if resolved_driver == resolved_judge:
+        raise RuntimeError(
+            "protocol v4 requires different model families for driver and judge "
+            f"(both resolved to {resolved_driver!r})"
+        )
+    return resolved_driver, resolved_judge
+
+
+def create_eval_llm_client(
+    *,
+    allow_mock: bool = False,
+    usage_log: str | Path | None = None,
+) -> BaseLLMClient:
     """v4 §5 评估独立性：评判端主裁判，**不同家族** LLM。
 
     与驱动端（embedding + Gemini 提取）刻意分离，结构化判定
@@ -226,12 +393,23 @@ def create_eval_llm_client(*, allow_mock: bool = False) -> BaseLLMClient:
         )
     provider = Config.EVAL_LLM_PROVIDER
     if provider in _OPENAI_COMPATIBLE:
+        assert_model_family_separation(
+            driver_provider=Config.LLM_PROVIDER,
+            driver_model=Config.LLM_MODEL,
+            judge_provider=Config.EVAL_LLM_PROVIDER,
+            judge_model=Config.EVAL_LLM_MODEL,
+            driver_family=Config.LLM_FAMILY,
+            judge_family=Config.EVAL_LLM_FAMILY,
+        )
         return OpenAICompatibleClient(
             api_key=Config.EVAL_LLM_API_KEY,
             base_url=Config.EVAL_LLM_BASE_URL or None,
             model=Config.EVAL_LLM_MODEL,
             temperature=0.0,
             rpm=Config.EVAL_LLM_RPM,
+            provider=provider,
+            role="judge",
+            usage_log=usage_log,
         )
     raise ValueError(
         f"不支持的 EVAL_LLM_PROVIDER={provider!r}。"
@@ -246,7 +424,15 @@ class MockEvaluationJudge(BaseLLMClient):
     真实评估必须由不同家族 LLM 主裁判完成（v4 §5）。
     """
 
-    def call_llm(self, prompt: str, system_prompt: Optional[str] = None, temperature: Optional[float] = None) -> str:
+    def call_llm(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: Optional[float] = None,
+        *,
+        max_tokens: Optional[int] = None,
+        operation: str = "unspecified",
+    ) -> str:
         # prompt 形如：记忆=<content>。问题=<question>。标准事实=<reference_fact>。请判定…
         import re
         mem_m = re.search(r"记忆=([^\n。]*)", prompt)

@@ -31,9 +31,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 from ananke.text_norm import normalize
 
@@ -97,7 +99,37 @@ class LLMCache:
 
     def _composite_key(self, category: str, normalized_input: str) -> str:
         ph = self.prompt_hashes.get(category, "")
-        return f"{self.model_tag}|{ph}|{category}|{normalized_input}"
+        return self.compose_key(self.model_tag, ph, category, normalized_input)
+
+    @staticmethod
+    def compose_key(
+        model_tag: str,
+        prompt_hash: str,
+        category: str,
+        normalized_input: str,
+    ) -> str:
+        """Single source for cache-key construction, including read-only preflight."""
+        return f"{model_tag}|{prompt_hash}|{category}|{normalized_input}"
+
+    @staticmethod
+    def read_keys(cache_dir: str | Path, category: str) -> set[str]:
+        """Read valid keys without creating or mutating the cache directory."""
+        path = Path(cache_dir) / f"{category}.jsonl"
+        if not path.exists():
+            return set()
+        keys: set[str] = set()
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            key = record.get("key")
+            value = record.get("value")
+            if isinstance(key, str) and value is not None:
+                keys.add(key)
+        return keys
 
     def get(self, category: str, normalized_input: str) -> Optional[str]:
         """查缓存。命中返回值并计 hit；未命中返回 None 并计 miss。disabled 时恒返回 None（不计 hit/miss）。"""
@@ -151,6 +183,68 @@ class LLMCache:
                 n += sum(1 for line in p.read_text(encoding="utf-8").splitlines() if line.strip())
                 p.unlink()
         return n
+
+
+class FormalRunLock:
+    """Exclusive writer lock for formal P/F runs sharing one cache.
+
+    The lock is intentionally simple and fail-closed.  The runner releases it on
+    normal completion and also registers an interpreter-exit safeguard for an
+    exception or Ctrl-C.  After a hard process kill, the operator must inspect
+    and remove the small lock file explicitly; automatic stale-lock deletion
+    would risk two formal writers.
+    """
+
+    FILENAME = ".formal-run.lock"
+
+    def __init__(self, cache_dir: str | Path) -> None:
+        self.cache_dir = Path(cache_dir)
+        self.path = self.cache_dir / self.FILENAME
+        self._fd: int | None = None
+        self._token = str(uuid4())
+
+    def acquire(self) -> None:
+        if self._fd is not None:
+            return
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+        try:
+            fd = os.open(self.path, flags)
+        except FileExistsError as error:
+            raise RuntimeError(
+                f"formal cache lock already exists: {self.path}; "
+                "P/F runs must be strictly serial"
+            ) from error
+        try:
+            payload = json.dumps(
+                {"pid": os.getpid(), "token": self._token},
+                ensure_ascii=False,
+            ).encode("utf-8")
+            os.write(fd, payload)
+        except Exception:
+            os.close(fd)
+            self.path.unlink(missing_ok=True)
+            raise
+        self._fd = fd
+
+    def release(self) -> None:
+        if self._fd is None:
+            return
+        os.close(self._fd)
+        self._fd = None
+        try:
+            record = json.loads(self.path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
+        if record.get("token") == self._token:
+            self.path.unlink(missing_ok=True)
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self.release()
 
 
 def _is_hex8(s: str) -> bool:

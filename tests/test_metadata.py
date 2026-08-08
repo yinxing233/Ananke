@@ -28,7 +28,7 @@ class _ExtractionLLM:
     def __init__(self):
         self.prompts = []
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         self.prompts.append(prompt)
         return '["new fact"]'
 

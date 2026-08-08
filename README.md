@@ -8,7 +8,7 @@
    B1–B7 冻结裁决集；
 4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
 
-裁决集已经冻结且 B1–B7 已实现；2026-08-02 加入 LoCoMo 来源上下文保真修复后为 `73 passed`，但协议 v4 **尚未正式冻结**，当前数据只属探索阶段。冻结历史协议 v3 与初版
+裁决集已经冻结且 B1–B7 已实现；2026-08-08 路径 A 运行保护完成后为 `90 passed`，但协议 v4 **尚未正式冻结**，当前数据只属探索阶段。冻结历史协议 v3 与初版
 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
 不作为本轮代码修改依据。
 
@@ -33,11 +33,14 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `USE_MOCK_LLM` | `true` | `true`=离线 Mock（无需密钥）；`false`=接入真实 LLM |
-| `LLM_PROVIDER` | `openai-compatible` | 服务商：openai / deepseek / openrouter / groq / ollama / openai-compatible |
+| `LLM_PROVIDER` | `openai-compatible` | 服务商：openai / deepseek / gemini / openrouter / groq / ollama / openai-compatible |
 | `LLM_BASE_URL` | （空） | 留空则使用 provider 默认接口 |
 | `LLM_API_KEY` | （空） | 真实 LLM 密钥；绝不硬编码进代码 |
 | `LLM_MODEL` | `deepseek-chat` | 模型名 |
+| `LLM_FAMILY` | （自动推断） | 模型家族；模型名不透明时显式填写，供 judge 家族分离检查 |
 | `LLM_TEMPERATURE` | `0.0` | 固定 0.0 保证可复现（与协议控制变量一致） |
+| `LLM_RPM` | `30` | 驱动端预防性 RPM 节流；429 重试仍逐请求计量 |
+| `CACHE_ENABLED` | `true` | 提取/分类内容寻址缓存；正式模式强制开启 |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | 本地嵌入模型路径/名称 |
 | `WORKING_PROMOTION_STRATEGY` | `persistence` | `persistence`=实验组（External Selection）；`frequency`=对照组（Internal Selection） |
 
@@ -50,10 +53,25 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 - pre-audit 代码包含三层 JSONL、召回—五分类、P/F 策略、缓存和事件日志；
 - 2026-07-28 基线测试为 43/43；
 - 2026-07-30 B1–B7 实现后为 70/70；2026-08-02 来源上下文保真修复后为 73/73；
+- 2026-08-08 路径 A 保护批次后为 90/90：请求级 token/HTTP 计量、只读 preflight、
+  normalized exact duplicate、B7 异常边界、6-token 上限、judge family 分离与 P/F 串行锁；
 - 已闭合评估解析、轮级原子性、distinct-session EV、来源元数据和 CORE 召回；
 - `system_guided` 是未启用接口，v0.2 runner 中恒为 False；
 - 当前旧 253 轮没有可用 LLM 缓存，不能作为续跑检查点；
 - 正式验证前仍须完成独立复核、冒烟校准、验证集锁定和 `PREREGISTRATION.md`。
+
+## 路径 A：API 前预检
+
+以下命令只构造提示并检查缓存键，不创建 LLM 客户端，也不发出 API 请求：
+
+```bash
+uv run python tools/run_corpus.py data/locomo/conv-26_calibration_100.jsonl \
+  --preflight --formal --strategy persistence
+```
+
+真实 100 轮付费校准、计量产物和停止点见
+[`docs/CALIBRATION_PATH_A.md`](docs/CALIBRATION_PATH_A.md)。路径 A 不加入批量提取、本地 NLI、
+RPD 账本或真正检查点；先用这次小规模真实校准决定全量预算。
 
 ## 测试与实验组
 

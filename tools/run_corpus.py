@@ -25,7 +25,10 @@ system_guided=False 保证）。
 from __future__ import annotations
 
 import argparse
+import atexit
+import hashlib
 import json
+import math
 import re
 import shutil
 import sys
@@ -36,12 +39,21 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ananke.cache import FormalRunLock, LLMCache
 from ananke.config import Config
 from ananke.embedding import EmbeddingEngine
+from ananke.extraction import (
+    EXTRACTION_PROMPT_TEMPLATE,
+    EXTRACTION_USER_PREFIX,
+    _SYSTEM_PROMPT as EXTRACTION_SYSTEM_PROMPT,
+    _source_context_key,
+    _source_context_prompt,
+)
 from ananke.llm_client import create_llm_client
 from ananke.logger import EventLogger
 from ananke.memory_store import MemoryStore
 from ananke.pipeline import MemoryPipeline
+from ananke.relation import RELATION_PROMPT_TEMPLATE
 
 
 @dataclass(frozen=True)
@@ -101,6 +113,120 @@ def load_corpus(path: Path) -> list[CorpusTurn]:
     return items
 
 
+def _prompt_hash(template: str) -> str:
+    return hashlib.sha1(template.encode("utf-8")).hexdigest()[:8]
+
+
+def build_preflight_report(
+    corpus: list[CorpusTurn],
+    *,
+    cache_dir: str | Path,
+    model_tag: str,
+) -> dict:
+    """Read-only estimate: extraction is exact; stateful relation count is unknown."""
+    extraction_hash = _prompt_hash(EXTRACTION_PROMPT_TEMPLATE)
+    relation_hash = _prompt_hash(RELATION_PROMPT_TEMPLATE)
+    existing_extraction = LLMCache.read_keys(cache_dir, "extraction")
+    existing_pairs = LLMCache.read_keys(cache_dir, "pairs")
+
+    keys: list[str] = []
+    prompt_chars_by_key: dict[str, int] = {}
+    for turn in corpus:
+        normalized = _source_context_key(
+            turn.text,
+            turn.speaker,
+            turn.session_datetime,
+        )
+        key = LLMCache.compose_key(
+            model_tag,
+            extraction_hash,
+            "extraction",
+            normalized,
+        )
+        keys.append(key)
+        if key not in prompt_chars_by_key:
+            user_prompt = EXTRACTION_USER_PREFIX + _source_context_prompt(
+                turn.text,
+                turn.speaker,
+                turn.session_datetime,
+            )
+            prompt_chars_by_key[key] = len(EXTRACTION_SYSTEM_PROMPT) + len(user_prompt)
+
+    unique_keys = set(keys)
+    missing_keys = unique_keys - existing_extraction
+    input_chars = sum(prompt_chars_by_key[key] for key in missing_keys)
+    pair_prefix = f"{model_tag}|{relation_hash}|pairs|"
+    current_pair_entries = sum(key.startswith(pair_prefix) for key in existing_pairs)
+    return {
+        "mode": "preflight_no_api",
+        "model_tag": model_tag,
+        "cache_dir": str(cache_dir),
+        "turns": len(corpus),
+        "sessions": len({turn.session_id for turn in corpus if turn.session_id}),
+        "extraction": {
+            "unique_keys": len(unique_keys),
+            "existing_cache_hit_turns": sum(key in existing_extraction for key in keys),
+            "projected_cache_hit_turns_during_run": len(keys) - len(missing_keys),
+            "cache_miss_keys": len(missing_keys),
+            "minimum_logical_calls": len(missing_keys),
+            "actual_http_requests": None,
+            "request_count_note": (
+                "minimum assumes each extraction response parses on the first logical call; "
+                "parse retries and HTTP 429 retries are measured only by calibration"
+            ),
+            "input_chars_for_misses": input_chars,
+            "rough_input_tokens_char_div_4": math.ceil(input_chars / 4),
+            "rough_input_tokens_char_div_3": math.ceil(input_chars / 3),
+            "token_estimate_note": "rough character heuristic only; calibration uses provider usage",
+            "prompt_hash": extraction_hash,
+        },
+        "relation": {
+            "cache_miss_keys": None,
+            "minimum_logical_calls": None,
+            "actual_http_requests": None,
+            "reason": "depends on extraction output and evolving memory state",
+            "existing_pair_cache_entries_for_model_prompt": current_pair_entries,
+            "prompt_hash": relation_hash,
+        },
+    }
+
+
+def validate_run_mode(
+    *,
+    formal: bool,
+    no_cache: bool,
+    refresh_cache: bool,
+    cache_enabled: bool,
+    use_mock: bool,
+    strategy: str | None,
+    api_key_configured: bool = True,
+    temperature: float = 0.0,
+) -> None:
+    """Fail closed on options that would invalidate a formal run."""
+    if not formal:
+        return
+    if no_cache:
+        raise ValueError("formal mode forbids --no-cache")
+    if refresh_cache:
+        raise ValueError("formal mode forbids --refresh-cache")
+    if not cache_enabled:
+        raise ValueError("formal mode requires CACHE_ENABLED=true")
+    if use_mock:
+        raise ValueError("formal mode requires a real driving LLM")
+    if not api_key_configured:
+        raise ValueError("formal mode requires LLM_API_KEY")
+    if temperature != 0.0:
+        raise ValueError("formal mode requires LLM_TEMPERATURE=0.0")
+    if strategy is None:
+        raise ValueError("formal mode requires explicit --strategy")
+
+
+def _default_usage_log(event_log: str) -> str:
+    path = Path(event_log)
+    suffix = path.suffix or ".jsonl"
+    return str(path.with_name(f"{path.stem}_llm_usage{suffix}"))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="用真实 LLM + 真实嵌入跑语料，产出事件日志")
     ap.add_argument("corpus", help="语料文件：.txt(每行一条) 或 .jsonl(含 input 字段)")
@@ -127,7 +253,73 @@ def main() -> None:
         action="store_true",
         help="运行前清空两级缓存目录（提取+分类对），强制重新调用 LLM 落盘",
     )
+    ap.add_argument(
+        "--preflight",
+        action="store_true",
+        help="只读预检：精确统计提取 cache miss/字符量；不构造 LLM 客户端、不调用 API",
+    )
+    ap.add_argument(
+        "--preflight-out",
+        default=None,
+        help="可选：把 --preflight JSON 报告写入指定路径",
+    )
+    ap.add_argument(
+        "--formal",
+        action="store_true",
+        help="正式运行保护：强制缓存、真实模型、显式策略，并锁定共享缓存为单写者",
+    )
+    ap.add_argument(
+        "--usage-log",
+        default=None,
+        help="实际 HTTP 请求/Token JSONL；默认与 --log 同名并追加 _llm_usage",
+    )
     args = ap.parse_args()
+
+    try:
+        validate_run_mode(
+            formal=args.formal,
+            no_cache=args.no_cache,
+            refresh_cache=args.refresh_cache,
+            cache_enabled=Config.CACHE_ENABLED,
+            use_mock=Config.USE_MOCK_LLM,
+            strategy=args.strategy,
+            api_key_configured=bool(Config.LLM_API_KEY),
+            temperature=Config.LLM_TEMPERATURE,
+        )
+    except ValueError as error:
+        print(f"[abort] {error}")
+        raise SystemExit(2) from error
+
+    corpus = load_corpus(Path(args.corpus))
+    if not corpus:
+        print(f"[warn] 语料 {args.corpus} 为空或无有效输入。")
+        return
+
+    if args.preflight:
+        if args.no_cache or args.refresh_cache or args.clean:
+            print(
+                "[abort] --preflight 是只读模式，不可与 --no-cache/--refresh-cache/--clean 同用"
+            )
+            raise SystemExit(2)
+        report = build_preflight_report(
+            corpus,
+            cache_dir=Config.CACHE_DIR,
+            model_tag=f"{Config.LLM_PROVIDER}|{Config.LLM_MODEL}",
+        )
+        report["configuration"] = {
+            "use_mock": Config.USE_MOCK_LLM,
+            "cache_enabled": Config.CACHE_ENABLED,
+            "api_key_configured": bool(Config.LLM_API_KEY),
+            "temperature": Config.LLM_TEMPERATURE,
+        }
+        rendered = json.dumps(report, ensure_ascii=False, indent=2)
+        print(rendered)
+        if args.preflight_out:
+            output = Path(args.preflight_out)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(rendered + "\n", encoding="utf-8")
+            print(f"[ok] preflight 报告 → {output}")
+        return
 
     if args.strategy:
         Config.WORKING_PROMOTION_STRATEGY = args.strategy
@@ -144,11 +336,6 @@ def main() -> None:
         Config.CACHE_ENABLED = False
         print("[cache] 已禁用两级缓存（--no-cache）")
 
-    corpus = load_corpus(Path(args.corpus))
-    if not corpus:
-        print(f"[warn] 语料 {args.corpus} 为空或无有效输入。")
-        return
-
     # 数据目录预清理防护（GLM #7）：避免残留状态污染实验结果。
     # 红线：--clean 只清数据目录，**永远不得触碰缓存目录**（cache/ 是项目最贵的持久
     # 资产，253 轮 Qwen 调用全在里面）。若 --data 误指到缓存目录，拒绝执行。
@@ -164,9 +351,22 @@ def main() -> None:
     elif data_path.exists() and any(data_path.glob("*.jsonl")):
         print(f"[warn] 数据目录 {args.data} 非空，可能存在状态污染；加 --clean 清空后重跑。")
 
+    # 正式 P/F 共用同一缓存但必须串行；锁阻止两个 runner 竞态重复付费。
+    formal_lock = FormalRunLock(Config.CACHE_DIR) if args.formal else None
+    if formal_lock is not None:
+        try:
+            formal_lock.acquire()
+        except RuntimeError as error:
+            print(f"[abort] {error}")
+            raise SystemExit(3) from error
+        atexit.register(formal_lock.release)
+
     # 真实组件
     embedding = EmbeddingEngine(Config.EMBEDDING_MODEL)
-    llm = create_llm_client()  # 内部自动迁移旧 data/cache → cache/（红线：保住已付费调用）
+    usage_log = args.usage_log or _default_usage_log(args.log)
+    llm = create_llm_client(
+        usage_log=usage_log,
+    )  # 内部自动迁移旧 data/cache → cache/（红线：保住已付费调用）
     pipeline = MemoryPipeline(
         MemoryStore(args.data),
         embedding,
@@ -220,13 +420,42 @@ def main() -> None:
     )
 
     # 两级缓存统计（协议 v4 §8）：命中率高=续跑近乎零 API；miss=首跑新调用。
+    cache_metrics = None
     cache = getattr(llm, "cache", None)
     if cache is not None:
-        st = cache.stats()
-        print(f"\n[cache] 提取 hits={st['extraction']['hits']}/{st['extraction']['hits']+st['extraction']['misses']} "
-              f"(池 {st['extraction']['size']}) | "
-              f"分类对 hits={st['pairs']['hits']}/{st['pairs']['hits']+st['pairs']['misses']} "
-              f"(池 {st['pairs']['size']})")
+        cache_metrics = cache.stats()
+        print(f"\n[cache] 提取 hits={cache_metrics['extraction']['hits']}/{cache_metrics['extraction']['hits']+cache_metrics['extraction']['misses']} "
+              f"(池 {cache_metrics['extraction']['size']}) | "
+              f"分类对 hits={cache_metrics['pairs']['hits']}/{cache_metrics['pairs']['hits']+cache_metrics['pairs']['misses']} "
+              f"(池 {cache_metrics['pairs']['size']})")
+
+    usage = None
+    usage_stats = getattr(llm, "usage_stats", None)
+    if callable(usage_stats):
+        usage = usage_stats()
+        print(
+            "[api] "
+            f"逻辑调用={usage['logical_calls']} | HTTP请求={usage['http_requests']} | "
+            f"成功={usage['successes']} | 429={usage['rate_limited']} | 错误={usage['errors']} | "
+            f"input_tokens={usage['prompt_tokens']} | output_tokens={usage['completion_tokens']} | "
+            f"usage缺失={usage['successful_requests_without_usage']} | 日志={usage['log_path']}"
+        )
+
+    # 把零请求的 cache hit/miss 与真实 HTTP/token 计量放进同一持久事件，避免只留在 stdout。
+    pipeline.event_logger.log_audit(
+        "run_metrics",
+        completed=True,
+        corpus=str(args.corpus),
+        strategy=Config.WORKING_PROMOTION_STRATEGY,
+        turns=len(corpus),
+        sessions=len(sessions),
+        cache=cache_metrics,
+        api=usage,
+    )
+
+    if formal_lock is not None:
+        formal_lock.release()
+        atexit.unregister(formal_lock.release)
 
 
 if __name__ == "__main__":

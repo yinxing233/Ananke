@@ -9,6 +9,7 @@ from ananke.logger import EventLogger
 from ananke.memory_store import MemoryStore
 from ananke.models import MemoryEntry
 from ananke.pipeline import MemoryPipeline
+from ananke.relation import RelationParseError
 
 
 class _Embedding:
@@ -24,9 +25,11 @@ class _Embedding:
 class _CacheSpy:
     def __init__(self):
         self.values = {}
+        self.gets = []
         self.puts = []
 
     def get(self, category, key):
+        self.gets.append((category, key))
         return self.values.get((category, key))
 
     def put(self, category, key, value):
@@ -35,18 +38,32 @@ class _CacheSpy:
 
 
 class _ScriptedLLM:
-    def __init__(self, relation_replies):
+    def __init__(self, relation_replies, extracted_content="same fact extended"):
         self.relation_replies = list(relation_replies)
+        self.extracted_content = extracted_content
         self.cache = _CacheSpy()
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(
+        self,
+        prompt,
+        system_prompt=None,
+        temperature=None,
+        *,
+        max_tokens=None,
+        operation="unspecified",
+    ):
         if "Extract short, atomic facts" in prompt:
-            return '["same fact"]'
-        return self.relation_replies.pop(0)
+            return json.dumps([self.extracted_content])
+        assert max_tokens == 6
+        assert operation == "relation"
+        reply = self.relation_replies.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
+        return reply
 
 
-def _pipeline(tmp_path, replies):
-    llm = _ScriptedLLM(replies)
+def _pipeline(tmp_path, replies, extracted_content="same fact extended"):
+    llm = _ScriptedLLM(replies, extracted_content=extracted_content)
     store = MemoryStore(tmp_path / "data")
     store.add(MemoryEntry(id="existing", content="same fact", session_id="s1"))
     pipeline = MemoryPipeline(
@@ -119,9 +136,9 @@ def test_b7_only_successful_retry_is_cached(tmp_path):
 
 def test_b7_invalid_cached_label_fails_closed(tmp_path):
     pipeline, llm = _pipeline(tmp_path, ["duplicate"])
-    llm.cache.values[("pairs", "same fact||same fact")] = "bogus"
+    llm.cache.values[("pairs", "same fact extended||same fact")] = "bogus"
 
-    with pytest.raises(ValueError, match="invalid cached relation label"):
+    with pytest.raises(RelationParseError, match="invalid cached relation label"):
         pipeline.process("input", session_id="s2")
 
     memory = pipeline.memory_store.find("existing")
@@ -135,3 +152,29 @@ def test_b7_invalid_cached_label_fails_closed(tmp_path):
         "turn_failed",
     ]
     assert records[0]["source"] == "cache"
+
+
+def test_b7_transport_value_error_is_not_mislabeled_as_parse_failure(tmp_path):
+    pipeline, llm = _pipeline(tmp_path, [ValueError("transport configuration")])
+
+    with pytest.raises(ValueError, match="transport configuration"):
+        pipeline.process("input", session_id="s2")
+
+    records = _records(tmp_path / "events.jsonl")
+    assert [record["event"] for record in records] == ["turn_failed"]
+
+
+def test_exact_duplicate_short_circuits_relation_llm_and_is_audited(tmp_path):
+    pipeline, llm = _pipeline(tmp_path, [], extracted_content="Same Fact!")
+
+    pipeline.process("input", session_id="s2")
+
+    memory = pipeline.memory_store.find("existing")
+    assert memory.external_validation == 1
+    assert not any(category == "pairs" for category, _ in llm.cache.gets)
+    assert not any(category == "pairs" for category, _, _ in llm.cache.puts)
+    records = _records(tmp_path / "events.jsonl")
+    rule_events = [r for r in records if r["event"] == "rule_based_duplicate"]
+    assert len(rule_events) == 1
+    dedup = next(r for r in records if r["event"] == "memory_dedup_skip")
+    assert dedup["classification_source"] == "normalized_exact_rule"

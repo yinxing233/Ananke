@@ -6,7 +6,11 @@ import math
 import pytest
 
 from ananke.config import Config
-from ananke.llm_client import MockEvaluationJudge, create_eval_llm_client
+from ananke.llm_client import (
+    MockEvaluationJudge,
+    assert_model_family_separation,
+    create_eval_llm_client,
+)
 from ananke.memory_store import MemoryStore
 from ananke.models import LayerEnum, MemoryEntry
 from tools.evaluate import (
@@ -23,8 +27,18 @@ class _Judge:
         self.replies = list(replies)
         self.prompts = []
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(
+        self,
+        prompt,
+        system_prompt=None,
+        temperature=None,
+        *,
+        max_tokens=None,
+        operation="unspecified",
+    ):
         self.prompts.append(prompt)
+        self.max_tokens = max_tokens
+        self.operation = operation
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
             raise reply
@@ -33,7 +47,7 @@ class _Judge:
 
 def test_b6_verdict_labels_are_mutually_exclusive():
     assert parse_verdict("包含") == 1.0
-    assert parse_verdict("部分") == Config.EVAL_PARTIAL_CREDIT
+    assert parse_verdict("部分") == 0.5
     assert parse_verdict("不包含") == 0.0
     assert parse_verdict("结论：不包含。") == 0.0
     with pytest.raises(ValueError, match="ambiguous"):
@@ -53,6 +67,14 @@ def test_b6_judge_receives_question_and_reference_fact():
     assert score == 1.0
     assert "What language did the user learn?" in judge.prompts[0]
     assert "The user learned Python." in judge.prompts[0]
+    assert judge.max_tokens == 6
+    assert judge.operation == "evaluation"
+
+
+def test_b6_partial_credit_cannot_be_changed_by_environment(monkeypatch):
+    """B6 fixed 0.5 is protocol, not a runtime calibration knob."""
+    monkeypatch.setattr(Config, "EVAL_PARTIAL_CREDIT", 0.99, raising=False)
+    assert parse_verdict("部分") == 0.5
 
 
 def test_b6_probe_without_reference_fact_is_rejected(tmp_path):
@@ -90,9 +112,9 @@ def test_b6_judge_failures_are_excluded_and_reported(tmp_path):
     assert report["n_unscored_memories"] == 0
     assert report["results"][0]["per_probe_scores"] == [
         None,
-        Config.EVAL_PARTIAL_CREDIT,
+        0.5,
     ]
-    assert report["results"][0]["max_hit"] == Config.EVAL_PARTIAL_CREDIT
+    assert report["results"][0]["max_hit"] == 0.5
 
 
 def test_b6_all_failed_memory_is_unscored_not_negative(tmp_path):
@@ -130,6 +152,51 @@ def test_b6_mock_judge_requires_explicit_smoke_opt_in(monkeypatch):
     assert isinstance(
         create_eval_llm_client(allow_mock=True),
         MockEvaluationJudge,
+    )
+
+
+def test_b6_same_model_family_is_rejected_before_formal_judge_creation():
+    with pytest.raises(RuntimeError, match="different model families"):
+        assert_model_family_separation(
+            driver_provider="gemini",
+            driver_model="gemini-3.1-flash-lite",
+            judge_provider="openai-compatible",
+            judge_model="google/gemini-2.5-pro",
+        )
+
+
+def test_b6_eval_factory_enforces_model_family_separation(monkeypatch):
+    monkeypatch.setattr(Config, "USE_MOCK_LLM", False)
+    monkeypatch.setattr(Config, "EVAL_LLM_API_KEY", "test-key")
+    monkeypatch.setattr(Config, "LLM_PROVIDER", "gemini")
+    monkeypatch.setattr(Config, "LLM_MODEL", "gemini-3.1-flash-lite")
+    monkeypatch.setattr(Config, "LLM_FAMILY", "")
+    monkeypatch.setattr(Config, "EVAL_LLM_PROVIDER", "openai-compatible")
+    monkeypatch.setattr(Config, "EVAL_LLM_MODEL", "google/gemini-2.5-pro")
+    monkeypatch.setattr(Config, "EVAL_LLM_FAMILY", "")
+
+    with pytest.raises(RuntimeError, match="different model families"):
+        create_eval_llm_client()
+
+
+def test_b6_unknown_model_family_fails_closed_without_explicit_family():
+    with pytest.raises(RuntimeError, match="cannot determine model family"):
+        assert_model_family_separation(
+            driver_provider="openai-compatible",
+            driver_model="vendor/model-a",
+            judge_provider="openai-compatible",
+            judge_model="vendor/model-b",
+        )
+
+
+def test_b6_explicit_different_families_are_accepted():
+    assert_model_family_separation(
+        driver_provider="openai-compatible",
+        driver_model="vendor/model-a",
+        judge_provider="openai-compatible",
+        judge_model="vendor/model-b",
+        driver_family="family-a",
+        judge_family="family-b",
     )
 
 

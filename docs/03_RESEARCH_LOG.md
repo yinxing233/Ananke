@@ -171,3 +171,53 @@ Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.83
 - **仍未闭合**：本轮执行者完成了逐条协议对照，但仍需新上下文的独立只读复核；此外
   `R_recall`、分类器甲/乙、50 对人工锚点、真实冒烟、验证集锁定与正式预登记均未完成。
   因此协议 v4 继续保持草案状态。
+
+## 2026-08-08 · 路径 A 选择与真实 API 前停止点
+
+- **PI 裁决**：为避免实验仪器继续增殖，选择路径 A——接受小额付费，保持逐轮提取 + LLM
+  五分类的简单仪器。明确不实现批量提取、本地 NLI、RPD 账本与真正检查点；先用已暴露的
+  `conv-26` 小样本取得真实成本。
+- **协议修订**：top-1 受体选定后，归一化内容非空且完全相同的 pair 确定性判为 duplicate，
+  不调用分类 API；对 P/F 对称执行，并记录 `rule_based_duplicate` 与分类来源。该规则只覆盖 exact，
+  未变更既有 `R_RECALL=0.65` 短路，也未加入低相似度阈值。
+- **仪器收紧**：B6 的 0.5 改为不可配置常量；关系/judge 输出上限均为 6 tokens；B7 三次重试
+  限定于解析失败，传输/鉴权/配置异常保留身份；正式 judge 对未知/同家族 fail closed。
+- **成本与重放审计**：新增 append-only 请求计量，区分逻辑调用与包括 429 在内的实际 HTTP
+  尝试，记录 provider token usage；正式模式禁用缓存绕过并以独占锁强制 P/F 串行。
+- **诚实 preflight**：提取 miss 可由语料与缓存键精确计算；分类次数因提取输出和记忆状态演化
+  只能在校准后实测。完整 `conv-26` 离线预检为 419 轮/19 sessions/419 个确定提取 miss
+  （至少 419 次逻辑提取调用；实际 HTTP 受解析/429 重试影响）、
+  462,301 提示字符（粗略 115,576–154,101 input tokens）；分类请求保持 unknown。
+- **100 轮校准输入**：从同一已暴露对话按原顺序取前 100 轮（6 sessions）。正式保护 preflight
+  通过：100 个确定提取 miss（至少 100 次逻辑提取调用；实际 HTTP 待测）、110,695 提示字符
+  （粗略 27,674–36,899 input tokens）。当前配置
+  为真实驱动端、缓存开启、密钥存在、temperature=0；预检前后 `cache/` 均不存在，usage 日志为 0。
+  子集逐行等于完整语料前 100 行，SHA256 =
+  `E3ACF574E06A375117A7C026792909EC1EC05FED0117F4330E7C7BC98A240A98`。
+- **验证**：确定性测试 `90 passed`；`python -m compileall -q ananke tools tests`、
+  `run_corpus.py --help`、`evaluate.py --help` 与 `git diff --check` 均通过。最终完整/100 轮保护
+  preflight 后仍为 `cache_exists=False`、`usage_log_count=0`、`formal_lock_count=0`。
+- **停止点**：未创建 LLM 客户端，未发任何真实 API 请求。下一动作才是 100 轮付费校准；须先
+  由操作者明确跨过 [`CALIBRATION_PATH_A.md`](./CALIBRATION_PATH_A.md) 的 STOP 标记。
+
+## 2026-08-08（下午）· 守护断言纪律（从 dev_simulate 静默断裂教训立定）
+
+- **事件**：全量一致性审查发现 `tools/dev_simulate.py` 演示链**静默断裂**。8-08 exact-dup
+  规则（normalized exact duplicate）使 pipeline 对逐字相等的 pair 走确定性
+  `rule_based_duplicate`、**不消耗** MockRelationClassifier 的 script 队列；STEPS 中
+  6 个 dup 步骤因此被短路跳过，script 队列整体错位 → merge/contradict 链全部落空 →
+  `consolidated_to_core` / `conflict_link` / `core_promotion_blocked` 三类事件缺失。
+  但 docstring 与 02_IMPLEMENTATION.md 仍声称覆盖——**文档与工具行为脱节，且无任何
+  测试守护**，直至审查日才被发现（若未审查，静默期会继续）。
+- **病理**：这是 P0-A"协议条款无机器守护"病灶的**同构复发**，只是换到工具层。
+  诚实性依赖"人肉三方对照"（文档↔代码↔测试），成本高、易漏。
+- **纪律（PI 已认可，写死）**：
+  1. **任何声称"覆盖事件 X / 演示路径 Y"的工具，必须自带可运行的守护断言**——
+     缺失 X/Y 即非零退出（dev_simulate 已加：缺三类关键事件任一即 abort）。
+  2. 工具 docstring 的能力声明 = 其守护断言集的最小上界；改工具必须同步改断言，
+     改断言必须同步改文档，三者任一漂移即违反纪律。
+  3. **协议条款变更后，必须扫描 tools/ 下所有声称覆盖该条款的工具**，核对短路类
+     新规则（如 exact-dup、fail-closed）是否会改变其脚本/队列消耗路径。
+  4. 守护断言本身进 CI 或至少进常规测试清单，不依赖下一次人工审查发现。
+- **观测含义**：漂移探测器（Π 拆解自检）只防"新增功能漂移"，不防"既有工具因协议
+  变更静默失能"。后者须由守护断言承接——两类探测器互补，缺一不可。

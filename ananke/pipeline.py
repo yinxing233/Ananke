@@ -20,6 +20,7 @@ from ananke.relation import (
     RelationClassifier,
     LLMRelationClassifier,
 )
+from ananke.text_norm import normalize
 
 _RECALL_LAYER_PRIORITY = {
     LayerEnum.CORE: 0,
@@ -145,7 +146,29 @@ class MemoryPipeline:
                 existing_vecs.append(self.embedding_engine.encode(content)[0])
                 continue
 
-            relation = self.relation_classifier.classify(content, candidate.content)
+            normalized_new = normalize(content)
+            normalized_existing = normalize(candidate.content)
+            if normalized_new and normalized_new == normalized_existing:
+                # 2026-08-08 pre-freeze ruling: identity under the protocol's
+                # single normalization rule is deterministically duplicate.
+                # Keep top-1 recipient selection unchanged; only bypass the
+                # stochastic classifier after that recipient has been chosen.
+                relation = REL_DUPLICATE
+                classification_source = "normalized_exact_rule"
+                self.event_logger.log(
+                    "rule_based_duplicate",
+                    content=content,
+                    matched_memory_id=candidate.id,
+                    matched_content=candidate.content,
+                    cosine_similarity=round(best_sim, 3),
+                    rule="normalized_content_equality",
+                )
+            else:
+                relation = self.relation_classifier.classify(
+                    content,
+                    candidate.content,
+                )
+                classification_source = "classifier"
             if relation not in RELATION_LABELS:
                 self.event_logger.log_audit(
                     "classification_unparsed",
@@ -161,7 +184,13 @@ class MemoryPipeline:
                     f"invalid classifier relation label: {relation!r}"
                 )
             write_new, link_recipient = self._handle_relation(
-                content, candidate, relation, best_sim, session_id, system_guided
+                content,
+                candidate,
+                relation,
+                best_sim,
+                session_id,
+                system_guided,
+                classification_source,
             )
             if write_new:
                 memory = self._write(
@@ -220,6 +249,7 @@ class MemoryPipeline:
         similarity: float,
         session_id: Optional[str],
         system_guided: bool,
+        classification_source: str,
     ) -> tuple[bool, Optional[MemoryEntry]]:
         """按 v4 §2.3 信号映射处理 (m, e) 关系。
 
@@ -260,6 +290,7 @@ class MemoryPipeline:
                 max_similarity=round(similarity, 3),
                 matched_memory_id=recipient.id,
                 relation=relation,
+                classification_source=classification_source,
                 cross_session=cross_session,
                 ev_eligible=ev_eligible,
                 ev_contributed=ev_contributed,

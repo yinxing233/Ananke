@@ -57,7 +57,7 @@ class FakeExtractionLLM:
     def __init__(self, extractions):
         self.extractions = list(extractions)
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         if "extract" in prompt.lower():
             return json.dumps(self.extractions.pop(0), ensure_ascii=False) if self.extractions else "[]"
         return "[]"
@@ -232,7 +232,9 @@ def test_persistence_and_frequency_control_diverge_on_mixed_signal(tmp_path):
         "user follows sports": [0.8, -0.6, 0.0],
     }
     extractions = [["user likes badminton"], ["user plays sports"], ["user follows sports"]]
-    script = [REL_DUPLICATE, REL_RELATED, REL_RELATED]
+    # The first normalized-exact pair is handled by the deterministic rule and
+    # therefore does not consume a scripted classifier response.
+    script = [REL_RELATED, REL_RELATED]
 
     persist = make_pipeline(tmp_path / "p", extractions=list(extractions), vectors=vectors)
     persist.relation_classifier = MockRelationClassifier(script=list(script))

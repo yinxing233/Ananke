@@ -44,8 +44,8 @@ class Config:
     # 余弦召回阈值：新记忆 m 与既有记忆 e 的余弦 ≥ R_RECALL 才进入关系分类。
     # 初值 0.65，待冒烟校准（v4 §8 冻结条件之一）。
     R_RECALL = float(os.getenv("R_RECALL", "0.65"))
-    # 关系分类器方案：llm（方案乙，默认）| nli（方案甲，待接入）。
-    RELATION_CLASSIFIER_SCHEME = os.getenv("RELATION_CLASSIFIER_SCHEME", "llm").lower()
+    # 2026-08-08 路径 A：关系分类器固定为 LLM 五选一。
+    # 不保留一个实际上未接线的 NLI 开关，避免配置看似切换、运行却仍调用 LLM。
 
     # 中→慢闸（consolidated→core）晋升规则（v4 §2.3/§4，Fable5 漂移1 修正后）：
     # 晋升唯一信号 = mergeable 累积 local_reorganization_trigger ≥ LOCAL_REORG_THRESHOLD
@@ -64,6 +64,8 @@ class Config:
     LLM_API_KEY = os.getenv("LLM_API_KEY", "")
     LLM_BASE_URL = os.getenv("LLM_BASE_URL", "")  # 留空则使用 provider SDK 默认值
     LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
+    # 模型家族通常可由 provider/model 推断；代理网关或私有模型名无法推断时须显式填写。
+    LLM_FAMILY = os.getenv("LLM_FAMILY", "")
     LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.0"))
     # RPM 节流（I/O 韧性，不影响理论行为）：控制驱动端每分钟请求数，防撞 gemini 限流。
     # 默认 30（用户确认其 key = 30 rpm 免费层上限）；如限额更高可调 LLM_RPM 上调。
@@ -77,12 +79,13 @@ class Config:
     # 驱动端 = embedding + Gemini 提取；评判端 = DeepSeek/GLM 等**不同家族** LLM，
     # 结构化判定「记忆 X 是否包含回答问题 Q 所需事实：包含/部分/不包含」。
     # 默认与驱动端不同家族；嵌入模型在评估端禁止出现（防驱动-评判度量循环）。
-    EVAL_LLM_PROVIDER = os.getenv("EVAL_LLM_PROVIDER", "deepseek")
+    EVAL_LLM_PROVIDER = os.getenv("EVAL_LLM_PROVIDER", "deepseek").lower()
     EVAL_LLM_API_KEY = os.getenv("EVAL_LLM_API_KEY", "")
     EVAL_LLM_BASE_URL = os.getenv("EVAL_LLM_BASE_URL", "")
     EVAL_LLM_MODEL = os.getenv("EVAL_LLM_MODEL", "deepseek-chat")
-    # B6 已验收定值："包含"=1.0，"部分"=0.5，"不包含"=0.0。
-    EVAL_PARTIAL_CREDIT = float(os.getenv("EVAL_PARTIAL_CREDIT", "0.5"))
+    EVAL_LLM_FAMILY = os.getenv("EVAL_LLM_FAMILY", "")
+    EVAL_LLM_RPM = int(os.getenv("EVAL_LLM_RPM", "0"))
+    # B6 的部分分固定为 0.5，已不是配置项；唯一实现位于 tools/evaluate.py。
 
     # ---- 两级缓存（协议 v4 §8，续跑即重跑）----
     # 提取结果 + 分类对结果落盘，让换模型/换策略的重跑近乎零 API 成本，并给主测量量 D 去噪

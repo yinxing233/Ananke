@@ -50,12 +50,12 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ---
 
-## v0.2 实现状态（2026-07-30：**B1–B7 已实现并通过 70 项测试；协议仍未冻结**）
+## v0.2 实现状态（2026-08-08：**路径 A 运行保护已实现，90 项测试通过；协议仍未冻结**）
 
 > 协议 v4 是**草案、未冻结**。2026-07-28 形成的
 > [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 已于 2026-07-30 获 PI 验收，
 > 其实现已按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 完成。pre-audit Python 保存在
-> `05205a9`，当时基线为 **43 passed**；B1–B7 完成时为 **70 passed**，2026-08-02 来源上下文保真修复后当前为 **73 passed**。以下原阻断项均已闭合：
+> `05205a9`，当时基线为 **43 passed**；B1–B7 完成时为 **70 passed**，2026-08-02 来源上下文保真修复后为 **73 passed**；2026-08-08 路径 A 运行保护完成后为 **90 passed**。以下原阻断项均已闭合：
 >
 > 1. 轮级状态与状态事件采用事务提交；失败回滚并保留失败审计；
 > 2. `evaluate.py` 使用 question + reference fact，标签互斥，失败剔除并执行 5% 上限；
@@ -91,32 +91,39 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 `migration.promote_consolidated_memories`：受体 `local_reorganization_trigger ≥ LOCAL_REORG_THRESHOLD(2)` → 升 CORE；`conflict_trigger > 0` → **冻结在中层**（`core_promotion_blocked` 事件），直到矛盾被裁决。core 晋升**与 --strategy 无关**（v4 分歧改在整体升层集 D 上测，且经 PI 追认 D 仅限第一道闸，见 §6）。
 
 ### 模块清单（ananke/，v0.2 新增/改动）
-- **新增 `relation.py`**：`LLMRelationClassifier`（方案乙，复用 llm_client，`RELATION_CLASSIFIER_SCHEME=llm|nli`）+ `MockRelationClassifier`（确定性测试）。
-- **改写 `pipeline.py`**：`process()` 走召回-分类；保留 working→consolidated 策略切换（`promotion_strategy` 槽）；新增 `relation_classifier` 注入 + `_link_conflict()`（双向矛盾链接）。
+- **新增 `relation.py`**：`LLMRelationClassifier`（路径 A 固定方案乙，复用 llm_client）+ `MockRelationClassifier`（确定性测试）；关系输出上限 6 tokens，只有解析失败走 B7 三次重试。
+- **改写 `pipeline.py`**：`process()` 走召回-分类；保留 working→consolidated 策略切换（`promotion_strategy` 槽）；新增 `relation_classifier` 注入 + `_link_conflict()`（双向矛盾链接）；top-1 后的 normalized exact pair 走确定性 duplicate 并记录来源。
 - **改写 `reorganization.py`**：`apply_relation_event(recipient, action)` 受体语义累加 trigger + 记 `local_reorganization`。
 - **改写 `migration.py`**：`promote_consolidated_memories` 仅 merge trigger 晋升；conflict 阻断（记 `core_promotion_blocked`）。
 - **`models.py`**：`MemoryEntry` 使用
   `source_session_id/source_dia_id/source_speaker` 保存创建来源，并持久化
   `source_session_datetime`、`ev_contributing_session_ids`、`conflict_trigger`、`conflict_links`。
-- **`config.py`**：加 `R_RECALL=0.65`、`RELATION_CLASSIFIER_SCHEME`、`EVAL_LLM_*`、`EVAL_PARTIAL_CREDIT=0.5`；`LOCAL_REORG_THRESHOLD=2`；**删除 `CONFLICT_TRIGGER_THRESHOLD`**（old 晋升逻辑，漂移1 已删）；v3 余弦阈值降为 legacy 仅审计。
-- **`llm_client.py`**：加 `create_eval_llm_client()`（不同家族评判端）+ `MockEvaluationJudge`（子串匹配冒烟）。
-- 其余（embedding / extraction / activation / memory_store / logger / promotion）沿用 v3。
+- **`config.py`**：加 `R_RECALL=0.65`、`EVAL_LLM_*`、模型 family 与评判端 RPM；B6 的 0.5 不再是环境变量；`LOCAL_REORG_THRESHOLD=2`；**删除 `CONFLICT_TRIGGER_THRESHOLD`**（old 晋升逻辑，漂移1 已删）；v3 余弦阈值降为 legacy 仅审计。
+- **`llm_client.py`**：加 `create_eval_llm_client()`（不同家族评判端）+ `MockEvaluationJudge`（子串匹配冒烟）；正式 judge 对未知/同家族 fail closed；关闭 SDK 隐式重试，使每次真实 HTTP 尝试都经过可见计量并写 usage JSONL。
+- **新增 `usage.py`**：区分逻辑 LLM 调用与真实 HTTP 尝试，逐次记录成功、429、其它错误、操作类型、耗时及 provider token usage；不推测价格。
+- **新增 `cache.py` / `text_norm.py`**：两级缓存（extraction/pairs）+ §6 归一化唯一实现，见下方「两级缓存」节。
+- 其余沿用 v3：embedding / extraction / memory_store / logger / promotion。
+  **注**：`activation.py` 为 v3 遗留模块，v4 召回-分类管线不再调用 `detect_activations`（信号由 pipeline 的 `_handle_relation` 直接按分类结果登记），保留仅供历史参考，勿再接入。
 
 ### 事件日志
 状态事件包括 `memory_write` / `memory_dedup_skip` / `external_validation` /
 `internal_activation` / `local_reorganization` / `working_eviction` /
 `working_to_consolidated` / `consolidated_to_core` / `conflict_link` /
-`core_promotion_blocked`；失败审计另含 `classification_unparsed` 与 `turn_failed`。
+`core_promotion_blocked` / `rule_based_duplicate`；失败审计另含 `classification_unparsed` 与 `turn_failed`。
 每个轮内事件均带 `input_session_id/input_dia_id/input_speaker/system_guided`。
 
 ### 工具（tools/）
 - `dev_simulate.py`（v4 移植）：确定性 MockRelationClassifier + MockEmbedding +
-  ScriptedExtractionLLM，覆盖核心状态事件（含 conflict_link / core_promotion_blocked）；
-  支持 `--strategy/--data/--log`。
-- `run_corpus.py`：支持**会话感知语料**（.jsonl 含 `session_id`，或 .txt `# session: N` 标记）；`--strategy persistence|frequency` 对照。守反身性红线（只喂外部语料）。
-- **新增 `evaluate.py`**（v4 §5）：目标是独立家族 LLM 对 question + reference_fact 做
-  reference-grounded 判定；当前 pre-audit 版本存在标签子串 bug、缺 reference fact 与失败折算
-  混杂，输出不得用于正式结论。
+  ScriptedExtractionLLM，覆盖核心状态事件（含 conflict_link / core_promotion_blocked /
+  consolidated_to_core / rule_based_duplicate）；支持 `--strategy/--data/--log`。
+  **2026-08-08 修复**：exact-dup 短路规则引入后 script 队列曾错位导致演示链断裂
+  （consolidated_to_core / conflict_link / core_promotion_blocked 缺失），已按实际
+  分类器调用序重建 script 并在 main() 末尾加守护断言（缺失任一关键事件即非零退出）。
+- `run_corpus.py`：支持**会话感知语料**（.jsonl 含 `session_id`，或 .txt `# session: N` 标记）；`--strategy persistence|frequency` 对照。守反身性红线（只喂外部语料）。新增只读 `--preflight`（不构造客户端、不触发 API）与 `--formal`（禁止缓存绕过、要求真实模型/密钥/temperature=0/显式策略、独占共享缓存）；请求计量文件默认从事件日志名派生。
+  成功结束时把 cache hit/miss 与 API 汇总共同写入持久 `run_metrics` 审计事件。
+- **新增 `evaluate.py`**（v4 §5）：独立家族 LLM 对 question + reference_fact 做
+  reference-grounded 判定；互斥标签、缺 reference fact 拒绝、失败剔除与 5% 上限均已闭合，
+  “部分”固定 0.5、输出上限 6 tokens，并记录独立 usage JSONL。
 - **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。只描述、不判定理论。
 
 ### 测试
@@ -124,6 +131,9 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - 2026-07-30 B1–B7 实现后：`uv run pytest -q` → **70 passed**；2026-08-02 来源上下文
   保真修复后 → **73 passed**。覆盖评估契约、轮级原子性、分类硬失败、distinct-session EV、
   来源元数据贯通与上下文缓存隔离、CORE 三层召回与四关系处置。
+- 2026-08-08 路径 A 保护批次后：`python -m pytest -q` → **90 passed**。新增覆盖请求/token
+  计量、429 逐请求计数、preflight 估算、正式模式拒绝危险配置、P/F 串行锁、family 分离、
+  6-token 上限、B7 异常效力域与 exact duplicate 短路审计。
 - `uv run python -m compileall -q ananke tools tests` → 通过。
 
 ### 语料
@@ -145,15 +155,34 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - **两个真实 bug 修复（排查中发现，非 Claude 原清单）**：
   1. **迁移 key 不兼容（红线级）**：见上 `migrate_legacy_cache` 重写——否则 253 轮已付费成果在重放下全 miss。
   2. **B2 防呆解析 bug**：`replay_equiv_test._cache_model_tag` 原用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改为 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
-- **新增 `tools/export_annotation_pairs.py`**：从 `cache/pairs.jsonl` 分层导出 50 对标注模板（人工标注 + 方案甲/乙准确率拍板）。`model_tag` 含 `|` 的 key 用 `rpartition("||")`+`rsplit("|",2)` 还原两段记忆，避免 `|`/`||` 冲突错位。
+- **新增 `tools/export_annotation_pairs.py`**：从 `cache/pairs.jsonl` 分层导出 50 对标注模板，用于独立验收路径 A 的 LLM 分类准确率与 contradict 召回。`model_tag` 含 `|` 的 key 用 `rpartition("||")`+`rsplit("|",2)` 还原两段记忆，避免 `|`/`||` 冲突错位。
+
+### 路径 A：付费校准前停止点（2026-08-08）
+
+- PI 选择付费、简单仪器路线；本批次未实现批量提取、本地 NLI、RPD 账本或真正检查点。
+- 已从已暴露的 `conv-26` 固定前 100 轮探索子集：
+  `data/locomo/conv-26_calibration_100.jsonl`（运行数据被 `.gitignore` 排除，不接触其余验证候选）。
+  已逐行确认等于完整语料前 100 行；SHA256 =
+  `E3ACF574E06A375117A7C026792909EC1EC05FED0117F4330E7C7BC98A240A98`。
+- 只读 preflight 已通过正式保护条件：100 轮、6 sessions、100 个唯一提取 key、0 cache hit，
+  即 100 个 cache miss、**至少 100 次逻辑提取调用**；实际 HTTP 数还会受提取解析与 429 重试影响，
+  必须实测。miss 提示总计 110,695 字符，粗略约 27,674–36,899 input tokens。
+  分类调用数因提取结果与状态演化而保持 `unknown`，须由真实校准实测。
+- 同一预检对完整 `conv-26` 报告：419 轮、19 sessions、419 个唯一提取 key、0 hit（至少 419 次逻辑提取调用）、
+  462,301 提示字符，粗略约 115,576–154,101 input tokens；分类调用仍未知。
+- 当前预检配置满足：真实驱动端、缓存开启、密钥已配置、temperature=0。预检前后均无 `cache/`
+  目录、无 `*llm_usage*.jsonl`，证明本步骤没有创建客户端或发出真实 API 请求。
+  本次读取的 model tag 为 `openai-compatible|qwen3.6-27b`；它须经真实校准后才可冻结。
+- 下一步命令、产物与成本换算见 [`CALIBRATION_PATH_A.md`](./CALIBRATION_PATH_A.md)；本轮在该命令前停止。
 
 ### 待办（v4 冻结前）—— 2026-07-28 审计更新
 - [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
 - [x] PI 已于 2026-07-30 验收 `DECISIONS_v0.2_freeze.md`。
-- [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；当时 70/70 通过，来源上下文保真修复后 73/73 通过。
+- [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；当时 70/70 通过，来源上下文保真修复后 73/73、路径 A 保护后 90/90 通过。
 - [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
 - [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。
-- [ ] 校准 `R_RECALL`、分类器甲/乙并完成 50 对人工锚点；部分计分已由 B6 定为 0.5。
+- [x] 路径 A 将关系分类仪器固定为 LLM 五选一，不接入本地 NLI；部分计分已由 B6 定为 0.5。
+- [ ] 用真实 100 轮校准 `R_RECALL`、LLM 分类器可靠性/成本，并完成独立的 50 对人工锚点。
 - [ ] 锁定验证集，并新建一次性 `PREREGISTRATION.md`。
 - [ ] 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
 - 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）。

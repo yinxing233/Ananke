@@ -64,6 +64,27 @@ _LABEL_NORMALIZE = {
     "irrelevant": REL_UNRELATED,
 }
 
+
+class RelationParseError(ValueError):
+    """A model response cannot be parsed as a protocol relation label.
+
+    B7's three-attempt policy applies only to this error class.  Transport,
+    authentication, configuration and metering failures retain their own
+    exception identity and must not be mislabeled as semantic parse failures.
+    """
+
+
+def parse_relation_label(response: str) -> str:
+    if not response:
+        raise RelationParseError("关系分类收到空响应（基础设施故障，非语义判定）")
+    token = response.lower().split()[0].strip(".,:;\"'")
+    if not token:
+        raise RelationParseError("关系分类响应无可解析 token（基础设施故障）")
+    label = _LABEL_NORMALIZE.get(token)
+    if label is None:
+        raise RelationParseError(f"unknown relation label: {token!r}")
+    return label
+
 # 用户 prompt 的**固定结构**（{existing}/{new} 为输入变量占位）。关系分类 prompt 模板 =
 # _LLM_SYSTEM_PROMPT + RELATION_USER_PREFIX，作为缓存 key 的 prompt_hash 来源（B3）。
 # 改此结构即全量失效。
@@ -116,7 +137,7 @@ class LLMRelationClassifier(RelationClassifier):
         cached = cache.get("pairs", norm) if cache else None
         if cached is not None:
             if cached not in RELATION_LABELS:
-                error = ValueError(
+                error = RelationParseError(
                     f"invalid cached relation label: {cached!r}"
                 )
                 if self.event_logger is not None:
@@ -140,21 +161,18 @@ class LLMRelationClassifier(RelationClassifier):
             response = ""
             try:
                 response = self.llm_client.call_llm(
-                    prompt, system_prompt=_LLM_SYSTEM_PROMPT, temperature=self.temperature
+                    prompt,
+                    system_prompt=_LLM_SYSTEM_PROMPT,
+                    temperature=self.temperature,
+                    max_tokens=6,
+                    operation="relation",
                 ).strip()
-                if not response:
-                    raise ValueError("关系分类收到空响应（基础设施故障，非语义判定）")
-                token = response.lower().split()[0].strip(".,:;\"'")
-                if not token:
-                    raise ValueError("关系分类响应无可解析 token（基础设施故障）")
-                label = _LABEL_NORMALIZE.get(token)
-                if label is None:
-                    raise ValueError(f"unknown relation label: {token!r}")
+                label = parse_relation_label(response)
                 # C1：只缓存合法归一化标签。
                 if cache:
                     cache.put("pairs", norm, label)
                 return label
-            except ValueError as e:
+            except RelationParseError as e:
                 last_err = e
                 if self.event_logger is not None:
                     self.event_logger.log_audit(

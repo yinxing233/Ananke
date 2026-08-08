@@ -7,8 +7,9 @@
 import json
 
 import numpy as np
+import pytest
 
-from ananke.cache import LLMCache, normalize
+from ananke.cache import FormalRunLock, LLMCache, normalize
 from ananke.config import Config
 from ananke.logger import EventLogger
 from ananke.memory_store import MemoryStore
@@ -23,7 +24,7 @@ class CountingLLM:
         self.calls = 0
         self.cache = None  # 模拟 llm_client.cache 属性
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         self.calls += 1
         return self.response
 
@@ -166,6 +167,20 @@ def test_cache_persists_across_instances(tmp_path):
     assert c2.get("extraction", "k") == "v"
 
 
+def test_formal_run_lock_rejects_parallel_writer_and_releases(tmp_path):
+    first = FormalRunLock(tmp_path / "cache")
+    second = FormalRunLock(tmp_path / "cache")
+    first.acquire()
+    try:
+        with pytest.raises(RuntimeError, match="formal cache lock"):
+            second.acquire()
+    finally:
+        first.release()
+
+    second.acquire()
+    second.release()
+
+
 # ---- §6 归一化（协议守护：单一实现来源）----
 
 
@@ -228,7 +243,7 @@ def test_recall_deterministic_tiebreak_by_content(tmp_path):
     class FakeLLM:
         cache = None
 
-        def call_llm(self, p, system_prompt=None, temperature=None):
+        def call_llm(self, p, system_prompt=None, temperature=None, **kwargs):
             return "[]"
 
     emb = _FlatEmbedding()

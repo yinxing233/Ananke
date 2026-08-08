@@ -35,7 +35,7 @@ class _Embedding:
 class _ExtractionLLM:
     cache = None
 
-    def call_llm(self, prompt, system_prompt=None, temperature=None):
+    def call_llm(self, prompt, system_prompt=None, temperature=None, **kwargs):
         return '["new related fact"]'
 
 

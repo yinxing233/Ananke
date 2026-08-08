@@ -45,6 +45,11 @@ EVENT_META = {
     "consolidated_to_core": ("self", "→慢层", "#212121", "K"),
     "local_reorganization": ("trigger", "重组", "#c62828", "R"),
     "working_eviction": ("self", "淘汰", "#9e9e9e", "X"),
+    # v4 新增事件（2026-08-08 补全，与 02_IMPLEMENTATION.md 事件清单对齐）
+    "memory_dedup_skip": ("self", "去重", "#8d6e63", "D"),
+    "conflict_link": ("trigger", "矛盾链接", "#d32f2f", "C"),
+    "core_promotion_blocked": ("self", "阻断", "#5d4037", "B"),
+    "rule_based_duplicate": ("self", "规则去重", "#7b1fa2", "R"),
 }
 
 EXTERNAL_W = 1.0
@@ -79,8 +84,17 @@ def group_by_memory(records: list[dict]) -> dict[str, list[dict]]:
     grouped: dict[str, list[dict]] = defaultdict(list)
     for rec in records:
         e = rec.get("event")
-        if e == "local_reorganization":
-            mid = rec.get("recipient_memory_id") or rec.get("trigger_memory_id") or rec.get("memory_id")
+        if e == "local_reorganization" or e == "conflict_link":
+            # 受体语义事件：归到被检验的受体记忆（v4 §2.3 受体语义）
+            mid = (
+                rec.get("recipient_memory_id")
+                or rec.get("new_memory_id")
+                or rec.get("trigger_memory_id")
+                or rec.get("memory_id")
+            )
+        elif e == "rule_based_duplicate" or e == "memory_dedup_skip":
+            # 去重事件：归到被命中的既有记忆
+            mid = rec.get("matched_memory_id") or rec.get("memory_id")
         else:
             mid = rec.get("memory_id") or rec.get("trigger_memory_id")
         if not mid:
@@ -257,6 +271,12 @@ def _event_title(ev: dict) -> str:
         return f"[{t}] 重组: {ev.get('action')} (relation={ev.get('relation')})\n受体 {ev.get('recipient_memory_id','')[:8]} ← 候选 {ev.get('memory_id','')[:8]}"
     if e == "memory_dedup_skip":
         return f"[{t}] 去重跳过\nsimilarity={ev.get('max_similarity')} relation={ev.get('relation')} cross={ev.get('cross_session')}"
+    if e == "conflict_link":
+        return f"[{t}] 矛盾双向链接\n受体 {ev.get('recipient_memory_id','')[:8]} ↔ 新断言 {ev.get('new_memory_id','')[:8]}\n{ev.get('new_content','')[:40]}"
+    if e == "core_promotion_blocked":
+        return f"[{t}] 阻断（conflict>0 不升 CORE）\nconflict={ev.get('conflict_trigger')} merge={ev.get('local_reorganization_trigger')}"
+    if e == "rule_based_duplicate":
+        return f"[{t}] 规则去重（归一化逐字相等）\n{ev.get('content','')[:40]}"
     if e == "working_eviction":
         return f"[{t}] 淘汰\npersist={ev.get('persistence_score')}"
     return f"[{t}] {e}"
