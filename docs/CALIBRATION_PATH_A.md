@@ -31,7 +31,7 @@ P/F 对照的驱动端成本。路径 A 不加入批量提取、本地 NLI、RPD
   --preflight --formal --strategy persistence
 ```
 
-2026-08-08 的实际结果：
+2026-08-10 在当前 Mistral 配置下重新执行的实际结果：
 
 - 100 轮、6 sessions；
 - 100 个唯一提取 key，现有 cache hit 为 0，即 100 个确定 cache miss、至少 100 次逻辑提取调用；
@@ -39,9 +39,10 @@ P/F 对照的驱动端成本。路径 A 不加入批量提取、本地 NLI、RPD
 - miss 提示共 110,695 字符；字符启发式约 27,674–36,899 input tokens；
 - 分类调用为 `unknown`，因为它依赖真实提取结果和逐轮记忆状态；
 - 当前配置满足真实模型、缓存开启、密钥存在、temperature=0；
-- 本次预检读取到的 `model_tag` 为 `openai-compatible|qwen3.6-27b`；它是下一条命令将使用的
+- 本次预检读取到的 `model_tag` 为 `openai-compatible|mistral-small-2603`；它是下一条命令将使用的
   当前仪器，不等于已经完成冻结，若在调用前更换必须重新运行 preflight 并按新价格核算；
-- 预检前后 `cache/` 均不存在，`*llm_usage*.jsonl` 数量均为 0。
+- `cache/` 当前存在但为空，Mistral extraction/pairs cache hit 均为 0；预检未写入缓存；
+- 正式目标 data/event/usage 路径均不存在，且没有 `.formal-run.lock`，可开始首次校准运行。
 
 完整 419 轮的同类预检为 419 个确定提取 miss（至少 419 次逻辑提取调用）、462,301 提示字符，粗略约
 115,576–154,101 input tokens；这不是 provider 计费 token，也不包含状态依赖的分类量。
