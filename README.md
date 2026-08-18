@@ -8,9 +8,35 @@
    B1–B7 冻结裁决集；
 4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
 
-裁决集已经冻结且 B1–B7 已实现；2026-08-08 路径 A 运行保护完成后为 `90 passed`，但协议 v4 **尚未正式冻结**，当前数据只属探索阶段。冻结历史协议 v3 与初版
+裁决集已经冻结且 B1–B7 已实现；2026-08-18 已在 `conv-26` 上完成 419 轮 P/F 探索性双运行，
+仪器全链路点火完成。但协议 v4 **尚未正式冻结**，本次两项推测因 EV=0 和缺少比较组均为
+`not_testable`，不是正式验证结论。冻结历史协议 v3 与初版
 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
 不作为本轮代码修改依据。
+
+## 文档地图（新会话先读这里，不用扫全部 docs）
+
+| 文档 | 一句话 | 何时读 |
+|---|---|---|
+| [`REPORT.md`](REPORT.md) | 探索性点火报告：两个观察→仪器→结果→EV=0 三解释→not_testable | 想了解这个项目做了什么 |
+| [`CASE_STUDIES.md`](docs/CASE_STUDIES.md) | 治理案卷：3 个漂移事件如何被抓住与制度化 | 想了解"如何治理 AI 执行者" |
+| `00_THEORY.md` | 理论公理（几年不变） | 讨论理论时 |
+| `01_PROTOCOL_v4.md` | 当前协议草案（操作定义+判定函数） | 改代码/跑实验前 |
+| `01_PROTOCOL_v3.md` | v0.1 冻结协议（审计锚点） | 审计历史轮次 |
+| `DECISIONS_v0.2_freeze.md` | B1–B7 冻结裁决 + 后续修订（§12–§14） | 改动受裁决约束的行为前 |
+| `02_IMPLEMENTATION.md` | 实现事实 + 语义债 + 待办 | 实现 agent 必读 |
+| `03_RESEARCH_LOG.md` | 研究过程日志（讨论脉络/审查/漂移纠正） | 复盘决策演进 |
+| `RESEARCH_CONJECTURES.md` | 推测 1/2/3（not_testable 现状） | 看实验主张时 |
+| `IGNITION_RECEIPT_v0.2.md` | conv-26 点火回执（指纹/计量/产物哈希） | 审计运行真实性 |
+| `00_Claim_Chain.md` | 声明层级链 + 当前状态 | 了解主张边界 |
+| `docs/memos/` | 协作约定 + 归档索引 | 会话开始 |
+| `docs/archive/` | 历史归档（v0.1 轮次 + v0.2 过期文档） | 审计历史 |
+| `docs/calibration/` | 判例集 + 冻结清单 | 校准相关工作 |
+
+**按角色必读**：
+- **PI / 求职读者**：`README` → `REPORT` → `CASE_STUDIES`（3 份看完即可）；
+- **实现类 agent**：`README` → `02_IMPLEMENTATION` → `DECISIONS` → 当前协议（4 份）；
+- **审查类 agent**：全量（一次性审计场景才需要）。
 
 ## 运行
 
@@ -55,23 +81,22 @@ cp .env.example .env      # 然后填入你的 LLM_API_KEY
 - 2026-07-30 B1–B7 实现后为 70/70；2026-08-02 来源上下文保真修复后为 73/73；
 - 2026-08-08 路径 A 保护批次后为 90/90：请求级 token/HTTP 计量、只读 preflight、
   normalized exact duplicate、B7 异常边界、6-token 上限、judge family 分离与 P/F 串行锁；
+- 2026-08-18 空集降级回归测试加入后为 92/92；
 - 已闭合评估解析、轮级原子性、distinct-session EV、来源元数据和 CORE 召回；
 - `system_guided` 是未启用接口，v0.2 runner 中恒为 False；
-- 当前旧 253 轮没有可用 LLM 缓存，不能作为续跑检查点；
-- 正式验证前仍须完成独立复核、冒烟校准、验证集锁定和 `PREREGISTRATION.md`。
+- 旧 253 轮没有可用 LLM 缓存，不能作为续跑检查点；新的 `conv-26` P/F 运行已产生两级缓存并验证跨制度复用；
+- 正式验证前仍须完成 `R_RECALL` 定值、关系分类器独立验收、验证集锁定和
+  `PREREGISTRATION.md`；探索性全链路冒烟本身已经完成。
 
-## 路径 A：API 前预检
+## `conv-26` 探索性点火（2026-08-18）
 
-以下命令只构造提示并检查缓存键，不创建 LLM 客户端，也不发出 API 请求：
+P/F 两遍均完成 419 轮、19 sessions。Persistence 第一闸升层 14 条、最终
+WORKING/CONSOLIDATED/CORE = 50/8/6；Frequency 第一闸升层 62 条、最终 50/45/17。
+归一化后 P-only=0、F-only=48、D=48，两侧 EV 总和都是 0。所以这是真实的制度分叉，
+但不能被识别为 External Selection 对 Internal Selection 的效果。全量 judge evaluate 因结构性缺组被否决。
 
-```bash
-uv run python tools/run_corpus.py data/locomo/conv-26_calibration_100.jsonl \
-  --preflight --formal --strategy persistence
-```
-
-真实 100 轮付费校准、计量产物和停止点见
-[`docs/CALIBRATION_PATH_A.md`](docs/CALIBRATION_PATH_A.md)。路径 A 不加入批量提取、本地 NLI、
-RPD 账本或真正检查点；先用这次小规模真实校准决定全量预算。
+完整解读见 [`REPORT.md`](REPORT.md)，运行指纹与计量回执见
+[`IGNITION_RECEIPT_v0.2.md`](docs/IGNITION_RECEIPT_v0.2.md)。
 
 ## 测试与实验组
 

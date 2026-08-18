@@ -1,0 +1,17 @@
+{
+  "freeze_id": "v0.2-instrument-frozen",
+  "frozen_at": "2026-08-18T17:30:00+08:00",
+  "git_commit_object": "a969e5b (对象已创建，ref 因沙箱环境未持久化)",
+  "purpose": "仪器最小冻结：prompt hash 钉死，点火前基线",
+  "file_fingerprints_sha256": {
+    "ananke/relation.py": "74d5fe0e5d6c0c090db6f85cba0669bb5d5cd2e8611209d5a86741849a38a8ca",
+    "ananke/extraction.py": "b7dfdd9c9bec0f9f668a2dcce1797a33974e9ee8f32e726de185d776066e86d4",
+    "docs/calibration/relation_labels/README.md": "60a66e5db8ef9456a3a4fab8ecad59fcb74cc86b92dcd6ccb6e91045482c8a63",
+    "docs/calibration/relation_labels/cases.jsonl": "0b04c1cbab3fa03c50e6cf8a014b0af5f6f4f27044c23717e8255c34ead1ef8b",
+    "docs/01_PROTOCOL_v4.md": "c3b0e7393f25ac4f4ed7da333ec1c36f2983f59b75adebbd2392b90d02549afd",
+    "docs/02_IMPLEMENTATION.md": "3dfe47cfd1bd83d6376d4f5a0cd58e5f4f5c2640fd475b59b76ce37b135b58c1",
+    "docs/DECISIONS_v0.2_freeze.md": "ff7e7b3e09dae0a0bc56e6eab73172bce8aeb9637fb6f9d53aba19346ce34f39"
+  },
+  "test_status": "90 passed",
+  "relation_retest": "60%/κ=0.422 (moderate, 只记录不调优)"
+}
