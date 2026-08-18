@@ -21,7 +21,8 @@
   1) stdout 摘要：|P| |F| |D| Jaccard、judge 端命中率（推测 1）、机制签名（推测 2）。
   2) logs/divergence_<tag>.json：可机读结果。
 
-统计严谨性（v4 §6 / §8）：|D| ≥ 20 才达功效下限可做二项推断；否则打印欠功效警告。
+统计严谨性（v4 §6 / §8）：|D| ≥ 20 只表示达到样本量下限；若任一比较组为空或
+缺少 judge 分数，对应推测仍为 not_testable。|D| < 20 时打印欠功效警告。
 本工具只做**描述 + 提示**，不做理论判定（分析器纪律）。
 
 用法：
@@ -95,6 +96,23 @@ def _judge_hit_rate(items: list[dict]) -> float:
     return sum(1 for memory in scored if memory["evidence_backed"]) / len(scored)
 
 
+def _comparison_status(
+    left: list[dict],
+    right: list[dict],
+    left_rate: float,
+    right_rate: float,
+    *,
+    left_should_be_higher: bool,
+) -> tuple[str, bool | None, str | None]:
+    """Return a tri-state conjecture result without vacuous truth on empty groups."""
+    if not left or not right:
+        return "not_testable", None, "empty_comparison_group"
+    if left_rate != left_rate or right_rate != right_rate:
+        return "not_testable", None, "missing_judge_scores"
+    held = left_rate > right_rate if left_should_be_higher else left_rate < right_rate
+    return ("held" if held else "not_held"), held, None
+
+
 def analyze(persistence: dict, frequency: dict) -> dict:
     P = set(persistence)
     F = set(frequency)
@@ -123,6 +141,21 @@ def analyze(persistence: dict, frequency: dict) -> dict:
     h_onlyF_evpos = _judge_hit_rate(only_F_evpos)
     # 预测：F∖P 富集 EV=0，且 EV=0 子集 judge 命中率 < EV>0 子集
 
+    conjecture1_status, conjecture1_held, conjecture1_reason = _comparison_status(
+        items_only_P,
+        items_only_F,
+        h_only_P,
+        h_only_F,
+        left_should_be_higher=True,
+    )
+    conjecture2_status, conjecture2_held, conjecture2_reason = _comparison_status(
+        only_F_ev0,
+        only_F_evpos,
+        h_onlyF_ev0,
+        h_onlyF_evpos,
+        left_should_be_higher=False,
+    )
+
     underpowered = len(D) < POWER_FLOOR
     return {
         "n_promoted_P": len(P),
@@ -136,13 +169,16 @@ def analyze(persistence: dict, frequency: dict) -> dict:
         "hit_rate_onlyF_judge": h_only_F,
         "hit_rate_P_judge": h_P,
         "hit_rate_F_judge": h_F,
-        "conjecture1_held": (not (only_P and only_F)) or (h_only_P > h_only_F),
+        "conjecture1_status": conjecture1_status,
+        "conjecture1_held": conjecture1_held,
+        "conjecture1_not_testable_reason": conjecture1_reason,
         # 推测 2（机制签名；EV 仅作分段被解释项）
         "signature_onlyF_ev0_fraction": enrichment_ev0,
         "signature_onlyF_ev0_judge_hit": h_onlyF_ev0,
         "signature_onlyF_evpos_judge_hit": h_onlyF_evpos,
-        "conjecture2_held": (len(only_F_ev0) > 0 and len(only_F_evpos) > 0
-                             and h_onlyF_ev0 < h_onlyF_evpos),
+        "conjecture2_status": conjecture2_status,
+        "conjecture2_held": conjecture2_held,
+        "conjecture2_not_testable_reason": conjecture2_reason,
         "underpowered": underpowered,
         "power_floor": POWER_FLOOR,
         "only_P": [persistence[m]["content"] for m in only_P],
@@ -152,6 +188,14 @@ def analyze(persistence: dict, frequency: dict) -> dict:
 
 def _fmt(x: float) -> str:
     return "nan" if x != x else f"{x:.3f}"
+
+
+def _status_text(status: str) -> str:
+    return {
+        "held": "成立(探索性)",
+        "not_held": "不成立",
+        "not_testable": "不可判(not_testable)",
+    }[status]
 
 
 def main() -> None:
@@ -182,22 +226,34 @@ def main() -> None:
     print("[推测1·主] judge 端 evidence 命中率（反驳条件：h_onlyP ≤ h_onlyF → 反驳）")
     print(f"  仅P∖F={_fmt(res['hit_rate_onlyP_judge'])}  仅F∖P={_fmt(res['hit_rate_onlyF_judge'])}"
           f"  | 整体 P={_fmt(res['hit_rate_P_judge'])} F={_fmt(res['hit_rate_F_judge'])}")
-    print(f"  → 推测1 {'成立(探索性)' if res['conjecture1_held'] else '不成立'}"
-          f"（仅当两侧独有集均非空时才有意义）")
+    print(f"  → 推测1 {_status_text(res['conjecture1_status'])}"
+          f"（仅当两侧独有集均非空且均有 judge 分数时可判）")
+    if res["conjecture1_not_testable_reason"]:
+        print(f"    原因: {res['conjecture1_not_testable_reason']}")
     print("-" * 64)
     print("[推测2·机制签名] F∖P 按 EV 分段（EV=被解释项），比 judge 命中率")
     print(f"  F∖P 中 EV=0 占比={_fmt(res['signature_onlyF_ev0_fraction'])} (理论预测→高)")
     print(f"  F∖P 中 EV=0 子集 judge命中={_fmt(res['signature_onlyF_ev0_judge_hit'])}"
           f"  vs  EV>0 子集 judge命中={_fmt(res['signature_onlyF_evpos_judge_hit'])} (预测 前者<后者)")
-    print(f"  → 推测2 {'成立(探索性)' if res['conjecture2_held'] else '不成立/不可判'}")
+    print(f"  → 推测2 {_status_text(res['conjecture2_status'])}")
+    if res["conjecture2_not_testable_reason"]:
+        print(f"    原因: {res['conjecture2_not_testable_reason']}")
     if res["underpowered"]:
         print("-" * 64)
         print(f"[!] 欠功效: |D|={res['n_divergence_D']} < 下限 {POWER_FLOOR}。")
         print("    当前结论**不可做二项推断**。建议：扩大语料/session 数至 |D|≥20；")
         print("    或执行阈值 sweep 预案，在 R_RECALL 网格上重估 |D| 稳定性。")
+    elif (
+        res["conjecture1_status"] == "not_testable"
+        and res["conjecture2_status"] == "not_testable"
+    ):
+        print("-" * 64)
+        print(f"[i] |D|={res['n_divergence_D']} ≥ 样本量下限 {POWER_FLOOR}，但比较组不完整。")
+        print("    样本量不能修复空集或缺失 judge 分数；当前两个推测均不可判。")
     else:
         print("-" * 64)
-        print(f"[ok] |D|={res['n_divergence_D']} ≥ 功效下限 {POWER_FLOOR}，可做二项推断。")
+        print(f"[ok] |D|={res['n_divergence_D']} ≥ 样本量下限 {POWER_FLOOR}。")
+        print("    仅比较组完整且有 judge 分数的推测可进入二项推断。")
     if res["only_P"]:
         print(f"\n仅 persistence 升层 P∖F（应富集 judge 命中）:")
         for c in res["only_P"]:

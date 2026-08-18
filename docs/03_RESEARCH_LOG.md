@@ -221,3 +221,38 @@ Claude 核验 round-2 数字对上（badminton pscore=3.1036、Mochi pscore=1.83
   4. 守护断言本身进 CI 或至少进常规测试清单，不依赖下一次人工审查发现。
 - **观测含义**：漂移探测器（Π 拆解自检）只防"新增功能漂移"，不防"既有工具因协议
   变更静默失能"。后者须由守护断言承接——两类探测器互补，缺一不可。
+
+## 2026-08-10–18 · 分类校准、仪器冻结与 `conv-26` P/F 完整点火
+
+- **100 轮路径 A 校准完成**：`conv-26` 前 100 轮 persistence 真实运行结束，请求级用量、缓存、
+  解析失败与状态演化均得到实测。这标志 `CALIBRATION_PATH_A.md` 的 STOP 已由 PI 明确跨过；
+  该文档达到自身声明的过期触发点，待后续文档清理归档。
+- **关系分类口径定稿后复跑**：12 个边界案例已由 PI 裁决，R1/R2 写入三层判定 prompt。
+  2026-08-11 首次重测为 62.0% / κ=0.448；2026-08-18 点火前同 prompt 最终复跑为
+  60.0% / κ=0.422，50 次调用全部成功、零解析失败。点火基线取后者，不挑选较高一次。
+  duplicate 金标 5 例命中 0，contradict 金标仍为 0 样本；这是仪器边界，不是继续调 prompt 的授权。
+- **点火前最小冻结**：提取 prompt、关系 prompt、协议/裁决/实现文档与判例账本指纹记入
+  `docs/calibration/FREEZE_MANIFEST_v0.2.json`；对应 commit object 为
+  `a969e5b4dce9df16950b631000c2a0a7cbf04461`，后由 `rescue` 分支恢复可达。
+- **Persistence 完整运行**：419 轮/19 sessions，`completed=true`。事件计数：写入 673、淘汰 609、
+  IA 410、局部重组 84、第一闸 14、CORE 晋升 6、`conflict_link` 5、分类解析重试 2。
+  终态 W/C/CORE=50/8/6，EV 总和 0。HTTP=1,005（提取 419+关系 586），零 429、零 HTTP 错误。
+- **Frequency 完整运行**：同语料同顺序 419 轮/19 sessions，`completed=true`。写入 658、淘汰 546、
+  IA 418、局部重组 98、第一闸 62、CORE 晋升 17、`conflict_link` 4、分类解析重试 2。
+  终态 W/C/CORE=50/45/17，EV 总和 0。提取 419/419 从 P 共享缓存命中，只产生 153 次
+  relation HTTP 请求；这是串行运行顺序下的边际成本，不是 F 制度的固有优势。
+- **分歧集显影**：按协议归一化内容键对齐第一闸，P=14、F=62、交集=14、P-only=0、
+  F-only=48、D=48。这是真实的制度分叉，但两边 EV 都为 0：Persistence 只由 IA/e 累积，
+  Frequency 由不区分来源的 `total_activation` 累积（包含 related/mergeable/contradict 等非 EV 关系事件）。
+  因而分叉不能被识别为 External Selection 对 Internal Selection 的效果。
+- **EV=0 的双解释不闭合**：(a) duplicate 分类器 5 例命中 0，实际 EV 可能被检测盲区吞掉；
+  (b) `conv-26` 在当前提取表示下可能真的缺少跨 session duplicate。现有数据不能区分两者。
+- **两项推测均不可判**：推测 1 缺 `P∖F`；推测 2 缺 `F∖P` 内 `EV>0` 子组。旧
+  `divergence_analysis.py` 会把推测 1 的空集真空判为 True；PI 批准后改为
+  `held / not_held / not_testable` 三态，两个推测的任一必需组为空都输出 `not_testable`。
+- **全量 DeepSeek evaluate 否决**：199 probes × (14+62) = 15,124 次 judge 请求，其中重叠集会
+  重复消耗 2,786 次。评判端不能创造缺失的比较组，故不运行。描述性 judge smoke 默认不做；
+  如报告后续真需要，必须另批固定种子、≤500 请求的抽样。
+- **conflict 计数更正**：P=181/F=384 是 `core_promotion_blocked` 重复审计事件，不是独立矛盾。
+  独立 `conflict_link` 为 P=5/F=4，被持续阻断的唯一记忆为 P=1/F=2。CORE 最终为 6/17，
+  故“阻断导致 CORE 趋零”未在本运行发生，但不外推为结构性风险已消失。

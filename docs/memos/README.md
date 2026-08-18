@@ -61,5 +61,5 @@ agent 交接 brief 必须包含：当前 `docs/memos/` 索引 + 本角色必读�
 
 ## 索引
 
-- `2026-08-08_calibration_decision_memo.md` — 100 轮付费校准前的决策备忘（三出口预案）
+- `2026-08-08_calibration_decision_memo.md` — ~~100 轮付费校准前的决策备忘（三出口预案）~~ **已决策并归档** → `archive/v0.2/`（2026-08-18）
 - `2026-08-08_pi_agent_collaboration.md` — PI↔agent 协作约定（决策上浮 / 信息下沉）

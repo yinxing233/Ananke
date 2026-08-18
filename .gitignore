@@ -10,6 +10,7 @@ data/
 # 两级缓存（项目最贵的持久资产：已付费的 LLM 调用结果）。与 data/ 平级，永不进 git，
 # 任何清理不得触碰（红线）。迁移/重置仅走显式 --refresh-cache。
 cache/
+_IGNITION_BACKUP/
 pids
 *.pid
 *.seed

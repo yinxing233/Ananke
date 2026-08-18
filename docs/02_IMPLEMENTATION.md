@@ -5,7 +5,20 @@
 > PI 已验收且已实现的裁决见 `DECISIONS_v0.2_freeze.md`；理论见 `00_THEORY.md`；
 > 研究过程见 `03_RESEARCH_LOG.md`。
 
-## 当前状态（2026-07-14，已升级协议 v3）
+## 当前状态（2026-08-18，v4 探索性点火完成）
+
+- 驱动端为 `openai-compatible|mistral-small-2603`，提取与关系分类 prompt 指纹由
+  `docs/calibration/FREEZE_MANIFEST_v0.2.json` 记录，点火基线 commit 为
+  `a969e5b4dce9df16950b631000c2a0a7cbf04461`（当前 `rescue` 分支）。
+- `conv-26` persistence/frequency 两遍均完成 419 轮、19 sessions，`run_metrics.completed=true`。
+  P 第一闸升层 14 条，最终 W/C/CORE=50/8/6；F 第一闸升层 62 条，最终 50/45/17。
+- 归一化第一闸集合为交集 14、P-only=0、F-only=48、D=48。两侧所有终态记忆 EV 总和均为 0，
+  故推测 1/2 均为 `not_testable`；未运行 DeepSeek 全量 evaluate。
+- P 产生 1,005 次 HTTP 请求（提取 419+关系 586）；F 在共享缓存上运行，提取 419/419 命中，
+  只产生 153 次 relation HTTP 请求。这是运行顺序下的边际成本，不是 Frequency 制度的固有成本。
+- 完整结果见仓库根目录 `REPORT.md`，指纹与计量回执见 `docs/IGNITION_RECEIPT_v0.2.md`。
+
+## 历史状态（2026-07-14，协议 v3）
 - **协议已升 v3**（2026-07-14，PI 决策）：EV 阈值 0.85→0.80；新增「写入前去重」控制变量 `DEDUP_SIMILARITY_THRESHOLD=0.80`（pipeline 在提取后、写入前比对既有 working+consolidated 记忆，≥0.80 跳过写入并记 `memory_dedup_skip`，消除真实 LLM 提取碎片化混杂）；提取 Prompt 改「输出与输入同语言」。详见 `01_PROTOCOL_v3.md`。
 - MVP 核心逻辑**已完成且被测过**：`uv run pytest` → 12/12 通过（确定性测试，用 FakeEmbedding / FakeLLM）。真实跑亦通过（见下）。
 - LLM 接入层：provider 抽象（`BaseLLMClient` + `MockLLMClient` + `OpenAICompatibleClient`），工厂 `create_llm_client()`。已支持 Gemini / DeepSeek / Groq / OpenRouter / Ollama / OpenAI。密钥走 `.env`（已被 .gitignore 忽略），零硬编码。`OpenAICompatibleClient.call_llm` 对真实 API 限流（如 Gemini 免费层 15 req/min 的 429）做**指数退避重试**（8s→16s→32s→…，最多 6 次），保证任意长度语料都能跑完——纯 I/O 韧性，不影响理论行为。
@@ -17,7 +30,7 @@
 ## 模块清单（ananke/）
 config / embedding / llm_client / extraction / activation / migration / reorganization / memory_store / logger / models / pipeline / promotion（共 12 个功能模块；另含 `__init__.py` 与运行入口 `main.py` / `run.py`，不计入模块数）。
 
-## 事件日志类型（logger event key，全 8 类）
+## v0.1 事件日志类型（历史 logger event key，全 8 类）
 `memory_write` / `internal_activation` / `external_validation` / `working_eviction` / `working_to_consolidated` / `local_reorganization` / `consolidated_to_core` / `memory_dedup_skip`（v3 新增，写入前去重命中时记）。代码 log 的英文 event key 与历史设计文档的中文事件名无一一对照，以此清单为准。
 
 ## 当前具体选型（属 Implementation，可换）
@@ -50,7 +63,7 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 
 ---
 
-## v0.2 实现状态（2026-08-08：**路径 A 运行保护已实现，90 项测试通过；协议仍未冻结**）
+## v0.2 实现状态（2026-08-18：**运行保护与探索性点火已完成；协议仍未冻结**）
 
 > 协议 v4 是**草案、未冻结**。2026-07-28 形成的
 > [`DECISIONS_v0.2_freeze.md`](./DECISIONS_v0.2_freeze.md) 已于 2026-07-30 获 PI 验收，
@@ -71,6 +84,23 @@ config / embedding / llm_client / extraction / activation / migration / reorgani
 > - **漂移2（更新能力）**：contradict 命中时新断言**写入快层 + 与受体建双向 conflict 链接**（系统须能更新世界状态），否则验证阶段命中率在含改口事实上系统性失真。mergeable 仍不写（冗余，留债）。
 > - **漂移3（PI 追认）**：中→慢闸对两策略走同一逻辑，对分歧集 D 零贡献；**追认 D 仅测 working→consolidated 第一道闸**，写入 §6。
 > - **漂移4（协议化）**：跨运行同一性判据「归一化内容比对」的规则（小写+去标点+折叠空白）成文入 §6，`tools/divergence_analysis._norm` 与之对齐。
+
+### `conv-26` P/F 完整点火（2026-08-18）
+
+| 指标 | Persistence | Frequency |
+|---|---:|---:|
+| 轮次 / sessions | 419 / 19 | 419 / 19 |
+| 第一闸 `working_to_consolidated` | 14 | 62 |
+| 第二闸 `consolidated_to_core` | 6 | 17 |
+| 终态 W / C / CORE | 50 / 8 / 6 | 50 / 45 / 17 |
+| `conflict_link` | 5 | 4 |
+| `core_promotion_blocked` 审计记录 | 181 | 384 |
+| 唯一被阻断记忆 | 1 | 2 |
+| EV 总和 | 0 | 0 |
+| HTTP 请求 | 1,005 | 153 |
+
+`core_promotion_blocked` 是每轮重新审计已阻断记忆时记录的状态事件，不能当作独立 conflict 数。
+本次 CORE 未趋零，但 conflict 无裁决/解封机制仍是 v0.3+ 结构性债务。
 
 ### 架构变更（v3→v4）：余弦判定 → 召回-分类两段式
 v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构升级**自然解除**，方向三作废：
@@ -124,7 +154,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - **新增 `evaluate.py`**（v4 §5）：独立家族 LLM 对 question + reference_fact 做
   reference-grounded 判定；互斥标签、缺 reference fact 拒绝、失败剔除与 5% 上限均已闭合，
   “部分”固定 0.5、输出上限 6 tokens，并记录独立 usage JSONL。
-- **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。只描述、不判定理论。
+- **新增 `divergence_analysis.py`**（v4 §6）：比对 persistence/frequency 两遍 CORE/CONSOLIDATED 升层集（**按归一化内容对齐**，非 id），算分歧集 D=(P∖F)∪(F∖P)、证据命中率 h_P/h_F、机制签名富集度；`|D|<20` 打印欠功效警告 + sweep 预案。推测输出为 `held / not_held / not_testable` 三态：任一必需比较组为空或缺少 judge 分数时不可判，不再真空判真。
 
 ### 测试
 - 2026-07-28 pre-audit 基线：`uv run pytest` → **43 passed**。
@@ -134,6 +164,8 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 - 2026-08-08 路径 A 保护批次后：`python -m pytest -q` → **90 passed**。新增覆盖请求/token
   计量、429 逐请求计数、preflight 估算、正式模式拒绝危险配置、P/F 串行锁、family 分离、
   6-token 上限、B7 异常效力域与 exact duplicate 短路审计。
+- 2026-08-18 空集降级修正后：`python -m pytest -q -p no:cacheprovider` → **92 passed**。新增覆盖
+  P-only/F-only 任一侧为空、以及 F-only 的 EV=0/EV>0 任一子组为空时的 `not_testable` 语义。
 - `uv run python -m compileall -q ananke tools tests` → 通过。
 
 ### 语料
@@ -142,8 +174,9 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
 ### 两级缓存 + 确定性审计（2026-07-22~24 增补，Claude 三段结构执行件①）
 
 > 为何要缓存：主测量量 D=(P\F)∪(F\P) 测"换策略后哪些记忆进巩固层"。若提取/分类非确定，
-> 噪声会渗入 D。两级缓存代码的目标是让提取与重叠分类对可确定性重放。**当前运行时
-> `cache/` 与 `data/cache/` 均不存在，旧 253 轮没有可用缓存，不能免费重放。**
+> 噪声会渗入 D。两级缓存代码的目标是让提取与重叠分类对可确定性重放。旧 253 轮仍没有可用缓存；
+> 2026-08-18 新 `conv-26` 运行已产生 `cache/extraction.jsonl` 与 `cache/pairs.jsonl`，F 运行对 P 的
+> 419 个提取键全命中，验证了跨制度缓存复用。
 
 - **新增 `cache.py`（两级缓存 extraction/pairs）**：key = `(model_tag, prompt_hash, category, normalized_input)`，落盘 `cache/{extraction,pairs}.jsonl`（**与 data/ 平级**，红线：只增不删，`.gitignore` 已忽略）。`model_tag` 含 `provider|model`，换模型自动失效；`prompt_hash` = 实际发给 LLM 的 prompt 模板 SHA1 前 8 位；`normalized_input` 提取用 §6 归一化(输入)，分类用 `归一化(new)||归一化(existing)`。
 - **新增 `text_norm.py`**：§6 归一化（小写+去标点+折叠空白）**唯一实现**；`cache.py` 与 `tools/divergence_analysis.py` 均 import 它（B1：消除 P0-A 三方矛盾病灶）。
@@ -157,7 +190,7 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
   2. **B2 防呆解析 bug**：`replay_equiv_test._cache_model_tag` 原用 `key.split("|",1)[0]` 取 model_tag，但 model_tag 含 `|`（如 `openai-compatible|deepseek-chat`）→ 截断后永不等真实 tag → 默认配置下合理重放被误 `exit(2)`。改为 key 固定末三段（hash/category/input 均不含 `|`）截断后拼回即完整 model_tag。
 - **新增 `tools/export_annotation_pairs.py`**：从 `cache/pairs.jsonl` 分层导出 50 对标注模板，用于独立验收路径 A 的 LLM 分类准确率与 contradict 召回。`model_tag` 含 `|` 的 key 用 `rpartition("||")`+`rsplit("|",2)` 还原两段记忆，避免 `|`/`||` 冲突错位。
 
-### 路径 A：付费校准前停止点（2026-08-08）
+### 路径 A：校准与点火回执（2026-08-10–18）
 
 - PI 选择付费、简单仪器路线；本批次未实现批量提取、本地 NLI、RPD 账本或真正检查点。
 - 已从已暴露的 `conv-26` 固定前 100 轮探索子集：
@@ -170,19 +203,21 @@ v3 死结（REORG 0.90 > DEDUP 0.80 使重组信号窗口为空集）由架构�
   分类调用数因提取结果与状态演化而保持 `unknown`，须由真实校准实测。
 - 同一预检对完整 `conv-26` 报告：419 轮、19 sessions、419 个唯一提取 key、0 hit（至少 419 次逻辑提取调用）、
   462,301 提示字符，粗略约 115,576–154,101 input tokens；分类调用仍未知。
-- 当前预检配置满足：真实驱动端、缓存开启、密钥已配置、temperature=0。预检前后均无 `cache/`
-  目录、无 `*llm_usage*.jsonl`，证明本步骤没有创建客户端或发出真实 API 请求。
-  本次读取的 model tag 为 `openai-compatible|qwen3.6-27b`；它须经真实校准后才可冻结。
-- 下一步命令、产物与成本换算见 [`CALIBRATION_PATH_A.md`](./CALIBRATION_PATH_A.md)；本轮在该命令前停止。
+- 上述只读 preflight 在当时证明了不发 API 的保护边界；其 STOP 后续已由 PI 明确跨过。
+- 100 轮 persistence 真实校准已于 2026-08-10 完成；关系分类同 prompt 最终复跑为
+  60.0% / κ=0.422，duplicate 5 例命中 0，形成明确的仪器边界。
+- 完整 `conv-26` P/F 点火已于 2026-08-18 完成，运行模型为
+  `openai-compatible|mistral-small-2603`。`CALIBRATION_PATH_A.md` 已达到过期触发点，待第二批文档清理时归档。
 
 ### 待办（v4 冻结前）—— 2026-07-28 审计更新
 - [x] 两级缓存、归一化、导出与重放**源码**已纳入版本控制；43/43 基线通过。
 - [x] PI 已于 2026-07-30 验收 `DECISIONS_v0.2_freeze.md`。
 - [x] 按 A3 → A1/B6 → A2/B7 → A4/A5/B2 → B1 → B3 顺序 Red → Green 实现；当时 70/70 通过，来源上下文保真修复后 73/73、路径 A 保护后 90/90 通过。
-- [ ] 修复后从第 1 轮重跑探索语料；旧 253 轮状态与日志只作探索审计，不续跑。
-- [ ] 新运行产生缓存后验证确定性重放；不得声称不存在的旧缓存可命中。
+- [x] 修复后从第 1 轮重跑 `conv-26` 探索语料；旧 253 轮状态与日志只作探索审计，未续跑。
+- [x] 新运行产生缓存后已验证 P→F 跨制度复用：F 的 419 次提取全命中；这不声称旧 253 轮可重放。
 - [x] 路径 A 将关系分类仪器固定为 LLM 五选一，不接入本地 NLI；部分计分已由 B6 定为 0.5。
-- [ ] 用真实 100 轮校准 `R_RECALL`、LLM 分类器可靠性/成本，并完成独立的 50 对人工锚点。
+- [x] 真实 100 轮成本校准完成；50 对开发集及 prompt 复跑完成并显示 duplicate 盲区。
+- [ ] `R_RECALL` 正式定值与不重叠 validation 集上的关系分类验收仍未完成。
 - [ ] 锁定验证集，并新建一次性 `PREREGISTRATION.md`。
 - [ ] 填 v4 §8 冻结条件 → 协议 v4 冻结 → MVP v0.2 tag。
-- 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）；④ **上下文感知分类**（给分类器注入对话上下文/记忆库全貌）是否改变 C2 结论是合法后续实验，但属仪器变更，v4 冻结前禁入（逐对接口设计理由见协议 v4 §2.2 与 DECISIONS §12，2026-08-11 事后重构，待 PI 追认）；⑤ **提取器上下文窗口**（同 session 前 N 轮，用于跨轮引用解析）——2026-08-18 评估后本轮不实施：提取器输入仅当前轮，跨轮引用系统性不提取，已登记为仪器属性；决策依据：读者定位（HR）与 PI 带宽约束。
+- 已知语义债（留 v0.3+）：① mergeable 命中不写新记忆（信息冗余，可接受）；② conflict 阻断后无裁决环节（矛盾如何"被解决"、被争议记忆何时解封），属 v0.3+ 设计；③ 归一化比对不处理改写容忍度（措辞不同的同事实判为两条分歧）；④ **上下文感知分类**（给分类器注入对话上下文/记忆库全貌）是否改变 C2 结论是合法后续实验，但属仪器变更，v4 冻结前禁入（逐对接口设计理由见协议 v4 §2.2 与 DECISIONS §12，2026-08-11 PI 已追认）；⑤ **提取器上下文窗口**（同 session 前 N 轮，用于跨轮引用解析）——2026-08-18 评估后本轮不实施：提取器输入仅当前轮，跨轮引用系统性不提取，已登记为仪器属性；决策依据：读者定位（HR）与 PI 带宽约束。

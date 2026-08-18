@@ -258,3 +258,78 @@ def test_b6_unscored_memory_remains_in_promoted_set_but_not_hit_denominator(
     assert report["n_promoted_P"] == 2
     assert report["n_only_P"] == 1
     assert math.isnan(report["hit_rate_onlyP_judge"])
+    assert report["conjecture1_status"] == "not_testable"
+    assert report["conjecture1_held"] is None
+
+
+def test_divergence_empty_exclusive_group_is_not_testable():
+    shared = {
+        "content": "shared fact",
+        "layer": "CONSOLIDATED",
+        "ev": 0,
+        "judge_hit": 1.0,
+        "evidence_backed": True,
+        "status": "scored",
+    }
+    frequency_only = {
+        "content": "frequency-only fact",
+        "layer": "CONSOLIDATED",
+        "ev": 0,
+        "judge_hit": 0.0,
+        "evidence_backed": False,
+        "status": "scored",
+    }
+
+    report = analyze(
+        {"shared fact": shared},
+        {"shared fact": shared, "frequency-only fact": frequency_only},
+    )
+
+    assert report["n_only_P"] == 0
+    assert report["n_only_F"] == 1
+    assert report["conjecture1_status"] == "not_testable"
+    assert report["conjecture1_held"] is None
+    assert report["conjecture1_not_testable_reason"] == "empty_comparison_group"
+    assert report["conjecture2_status"] == "not_testable"
+    assert report["conjecture2_held"] is None
+    assert report["conjecture2_not_testable_reason"] == "empty_comparison_group"
+
+
+def test_divergence_reports_held_only_when_both_comparison_groups_exist():
+    persistence_only = {
+        "content": "persistence-only fact",
+        "layer": "CONSOLIDATED",
+        "ev": 1,
+        "judge_hit": 1.0,
+        "evidence_backed": True,
+        "status": "scored",
+    }
+    frequency_ev0 = {
+        "content": "frequency ev0 fact",
+        "layer": "CONSOLIDATED",
+        "ev": 0,
+        "judge_hit": 0.0,
+        "evidence_backed": False,
+        "status": "scored",
+    }
+    frequency_evpos = {
+        "content": "frequency ev-positive fact",
+        "layer": "CONSOLIDATED",
+        "ev": 1,
+        "judge_hit": 1.0,
+        "evidence_backed": True,
+        "status": "scored",
+    }
+
+    report = analyze(
+        {"persistence-only fact": persistence_only},
+        {
+            "frequency ev0 fact": frequency_ev0,
+            "frequency ev-positive fact": frequency_evpos,
+        },
+    )
+
+    assert report["conjecture1_status"] == "held"
+    assert report["conjecture1_held"] is True
+    assert report["conjecture2_status"] == "held"
+    assert report["conjecture2_held"] is True

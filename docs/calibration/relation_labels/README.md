@@ -42,12 +42,16 @@ initial_cases_sha256: 7bfbc1b671160ab050c37b8d14e14627ab8c3994c15351d9e406b423fc
 |---|---|---|
 | human vs model（原始人工标签） | 40.0% | 0.200 |
 | gold vs model（12 例裁决后） | 46.0% | 0.259 |
-| **新 prompt（三层判定 + R1/R2）vs gold** | **62.0%** | **0.448** |
+| 新 prompt 首次重测（2026-08-11，三层判定 + R1/R2）vs gold | 62.0% | 0.448 |
+| **点火前最终复跑（2026-08-18，同 prompt）vs gold** | **60.0%** | **0.422** |
 
-- 新 prompt 重测（`tools/retest_relation_50.py`，2026-08-11，50 次真实 relation 调用全
+- 新 prompt 首次重测（`tools/retest_relation_50.py`，2026-08-11，50 次真实 relation 调用全
   success、零解析失败）把 κ 从 0.259 提升到 **0.448**（Landis & Koch: fair → moderate），
   over-merge 误判从 8 例降到 0，over-related 从 8 例降到 4。**12 例裁决产出的规则
   有效拉高分类器一致率，Mistral 可保留。**
+- 2026-08-18 在点火前用同一 prompt 和同一 50 对开发集复跑，得到 **60.0% / κ=0.422**，
+  50 次调用全部成功、零解析失败。点火基线以该次复跑为准；62%/0.448 保留为前一次结果，
+  不得事后挑选较高的一次。
 - 残差：duplicate 5 对全误判（判成 mergeable/related）——分类器仍不擅长"同一事实"
   识别，记入后续校准关注；contradict 仍零样本，定向补样待办。
 
@@ -284,7 +288,7 @@ unrelated 2（P014/P022）· duplicate 0 · contradict 0**。duplicate/contradic
 
 ## 冻结检查表
 
-- [ ] 完成 12 个边界案例裁决并记录时间
+- [x] 完成 12 个边界案例裁决并记录时间（2026-08-11）
 - [ ] 抽查至少 3 个 `model_clear_error` 条目
 - [ ] 为五个类别各保留 3–5 个“为什么不是相邻类”的判例
 - [ ] 从独立数据补齐 `contradict` 定向样本
