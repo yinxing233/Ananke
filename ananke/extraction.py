@@ -15,6 +15,9 @@ _SYSTEM_PROMPT = (
     "labels such as 'user', and resolve relative time expressions from the session date/time when "
     "the result is unambiguous. Never invent a person, date, or fact that is absent from the input "
     "and source context. "
+    "Make each fact self-contained: replace pronouns (she/he/it/they) and vague references "
+    "(e.g. 'something', 'that') with the explicit person/object when determinable from the input; "
+    "if a reference cannot be resolved, do not extract it. "
     "Output only a JSON array of strings, e.g. [\"User likes badminton\"] or [\"用户喜欢羽毛球\"]. "
     "Do not output any explanation, extra text, or code fences. If nothing is worth remembering, output []."
 )

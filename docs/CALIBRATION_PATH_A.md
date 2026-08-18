@@ -2,6 +2,10 @@
 
 状态：**已准备到真实 API 调用前；下方 STOP 之后的命令尚未执行。**
 
+关系分类的操作定义、开发案例与裁决状态统一维护在
+[`docs/calibration/relation_labels/`](calibration/relation_labels/)；其中当前 50 对已改列为定义开发集，
+不计作正式盲验集。
+
 本手册只覆盖“跑对话”的驱动端 API，不运行 judge，不触碰其余 9 条验证候选。目标是用已暴露的
 `conv-26` 前 100 轮测到真实 HTTP 请求、provider token usage、解析失败率和缓存复用，再估算完整
 P/F 对照的驱动端成本。路径 A 不加入批量提取、本地 NLI、RPD 账本或真正检查点。
