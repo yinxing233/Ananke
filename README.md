@@ -1,18 +1,40 @@
 # Ananke
 
-基于存续检验（persistence-based）的三层记忆实验仪器。当前权威层级为：
+[![CI](https://github.com/yinxing233/Ananke/actions/workflows/ci.yml/badge.svg)](https://github.com/yinxing233/Ananke/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-1. [`00_THEORY.md`](docs/00_THEORY.md)：稳定理论约束；
-2. [`01_PROTOCOL_v4.md`](docs/01_PROTOCOL_v4.md)：当前协议草案；
-3. [`DECISIONS_v0.2_freeze.md`](docs/DECISIONS_v0.2_freeze.md)：2026-07-30 经 PI 验收的
-   B1–B7 冻结裁决集；
-4. [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md)：当前实现事实与未完成项。
+用于比较长期记忆选择制度的三层记忆实验仪器。
 
-裁决集已经冻结且 B1–B7 已实现；2026-08-18 已在 `conv-26` 上完成 419 轮 P/F 探索性双运行，
-仪器全链路点火完成。但协议 v4 **尚未正式冻结**，本次两项推测因 EV=0 和缺少比较组均为
-`not_testable`，不是正式验证结论。冻结历史协议 v3 与初版
-[`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 保留供审计，
-不作为本轮代码修改依据。
+长期记忆系统会不断写入信息，但「哪些记忆应该进入更稳定的层级」通常隐含在实现里，难以单独检查。Ananke 把这个问题改写成可重复实验：同一输入流分别经过 Persistence（外部验证参与选择）和 Frequency（内部重复参与选择）两套制度，在 `WORKING → CONSOLIDATED → CORE` 三层中演化，并记录每次提取、召回、晋升、冲突和评估事件。
+
+它不是面向终端用户的记忆产品，也不以回答质量作为当前主指标。项目要交付的是一套可运行、可审计、允许结论为假的评测仪器：冻结操作定义，控制两遍运行的非实验变量，再根据必要比较组是否存在，将推测判为 `held`、`not_held` 或 `not_testable`。
+
+## 当前结果与边界
+
+2026-08-18，`conv-26` 在两套制度下各完成 419 轮、19 个 sessions 的探索性运行：
+
+| 观测量 | Persistence | Frequency |
+| --- | ---: | ---: |
+| 第一闸升层记忆 | 14 | 62 |
+| 最终 WORKING / CONSOLIDATED / CORE | 50 / 8 / 6 | 50 / 45 / 17 |
+
+归一化后的升层集合为 P-only=0、F-only=48、D=48，说明两套制度确实产生了不同轨迹。但两侧终态记忆的外部验证信号总和都是 EV=0，关键比较组不存在，因此目前不能把差异归因于 External Selection；两项推测都必须保持 `not_testable`。这次运行验证的是仪器能够完整执行并暴露不可检验条件，不是理论命题已经成立。协议 v4 也尚未正式冻结。
+
+仓库提供三类可以直接检查的材料：
+
+- **评测设计**：操作定义、P/F 对照制度、三态判定函数和主张边界；
+- **工程实现**：三层 JSONL、内容寻址缓存、只读 preflight、轮级原子性和审计事件；
+- **研究治理**：冻结裁决、声明层级和三个 agent 漂移案例，记录设计如何在审查中被修正。
+
+## 快速检查
+
+```bash
+uv sync --locked
+uv run pytest -q -p no:cacheprovider
+uv run python run.py
+```
+
+测试不需要 API 密钥。`run.py` 默认使用 mock LLM；第一次运行交互示例时会下载本地 embedding 模型。探索性点火报告见 [`REPORT.md`](REPORT.md)，设计漂移案例见 [`CASE_STUDIES.md`](docs/CASE_STUDIES.md)。
 
 ## 文档地图（新会话先读这里，不用扫全部 docs）
 
@@ -37,6 +59,8 @@
 - **PI / 求职读者**：`README` → `REPORT` → `CASE_STUDIES`（3 份看完即可）；
 - **实现类 agent**：`README` → `02_IMPLEMENTATION` → `DECISIONS` → 当前协议（4 份）；
 - **审查类 agent**：全量（一次性审计场景才需要）。
+
+文档的权威层级依次是：[`00_THEORY.md`](docs/00_THEORY.md) 的稳定理论约束、[`01_PROTOCOL_v4.md`](docs/01_PROTOCOL_v4.md) 的当前协议草案、[`DECISIONS_v0.2_freeze.md`](docs/DECISIONS_v0.2_freeze.md) 的冻结裁决，以及 [`02_IMPLEMENTATION.md`](docs/02_IMPLEMENTATION.md) 的实现事实与未完成项。B1–B7 裁决已经冻结并实现；历史协议 v3 与初版 [`Memory_Architecture_设计文档_MVP.md`](docs/Memory_Architecture_设计文档_MVP.md) 只用于审计，不作为当前代码修改依据。
 
 ## 运行
 
